@@ -27,6 +27,7 @@ class BotManager {
 
     const choices = [
       { name: '🔗 Connect Bot(s)', value: 'connect' },
+      { name: '🔇 Silent Connect (Test Mode)', value: 'silent_connect' },
       { name: '🔌 Disconnect All Bots', value: 'disconnect', disabled: connectedBots.length === 0 },
       { name: '🤖 Individual Bot Control', value: 'individual', disabled: connectedBots.length === 0 },
       { name: '🔍 Explore Addon', value: 'addon', disabled: connectedBots.length === 0 },
@@ -53,6 +54,9 @@ class BotManager {
     switch (action) {
       case 'connect':
         await this.connectBots();
+        break;
+      case 'silent_connect':
+        await this.silentConnectBots();
         break;
       case 'disconnect':
         await this.disconnectAllBots();
@@ -142,6 +146,69 @@ class BotManager {
     }
 
     console.log(chalk.green(`\n🎉 Connection process completed!`));
+    await this.waitForKeypress();
+  }
+
+  async silentConnectBots() {
+    const accounts = await Database.getAccounts();
+    
+    if (accounts.length === 0) {
+      console.log(chalk.yellow('⚠️ No accounts found. Please add an account first.'));
+      await this.waitForKeypress();
+      return;
+    }
+
+    const serverConfig = await Database.getServerConfig();
+    
+    console.log(chalk.blue(`🌐 Server: ${serverConfig.server_ip}:${serverConfig.server_port}`));
+    console.log(chalk.yellow('🔇 Silent Connect Mode - No commands or chat will be sent'));
+    
+    const choices = accounts.map(account => ({
+      name: `${account.email} ${account.is_connected ? chalk.green('(Connected)') : chalk.red('(Disconnected)')}`,
+      value: account.email,
+      disabled: this.bots.has(account.email) && this.bots.get(account.email).isConnected
+    }));
+
+    const { selectedAccounts } = await inquirer.prompt([
+      {
+        type: 'checkbox',
+        name: 'selectedAccounts',
+        message: 'Select accounts to silently connect:',
+        choices,
+        validate: (input) => input.length > 0 || 'Please select at least one account'
+      }
+    ]);
+
+    console.log(chalk.blue(`🚀 Silently connecting ${selectedAccounts.length} account(s)...`));
+
+    for (const email of selectedAccounts) {
+      try {
+        const account = accounts.find(acc => acc.email === email);
+        console.log(chalk.blue(`\n🔄 Connecting ${email}...`));
+        
+        const bot = new MinecraftBot(
+          account.email,
+          account.password,
+          serverConfig.server_ip,
+          serverConfig.server_port
+        );
+
+        // Set silent mode flag before connecting
+        bot.silentMode = true;
+        
+        await bot.connect();
+        // Note: NOT calling startAFKSequence() for silent mode
+        
+        this.bots.set(email, bot);
+        console.log(chalk.green(`✅ ${email} connected silently (no commands sent)!`));
+        
+      } catch (error) {
+        console.error(chalk.red(`❌ Failed to connect ${email}: ${error.message}`));
+      }
+    }
+
+    console.log(chalk.green(`\n🎉 Silent connection process completed!`));
+    console.log(chalk.yellow('📊 Bots are connected but idle - no chat messages or commands sent'));
     await this.waitForKeypress();
   }
 

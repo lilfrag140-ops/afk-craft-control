@@ -62,39 +62,44 @@ export class MinecraftBot {
           await Database.updateAccountStatus(this.email, 'connected', true);
           await Database.logEvent(this.email, 'SUCCESS', 'Successfully connected to server');
           
-          // Wait longer after spawn to appear more human-like (10-20 seconds)
-          const initialDelay = Math.random() * 10000 + 10000; // Random delay between 10-20 seconds
-          console.log(chalk.magenta(`⏱️ [${this.email}] Waiting ${(initialDelay/1000).toFixed(1)}s to appear more natural...`));
-          
-          setTimeout(async () => {
-            try {
-              if (this.bot && this.bot._client && this.bot.chat && this.isConnected) {
-                // Send team chat first
-                this.bot.chat('/team chat');
-                await Database.logEvent(this.email, 'INFO', 'Team chat command sent: /team chat');
-                console.log(chalk.green(`✅ [${this.email}] Team chat command sent`));
-                
-                // Wait another random period before AFK (5-15 seconds)
-                const afkDelay = Math.random() * 10000 + 5000;
-                console.log(chalk.magenta(`⏱️ [${this.email}] Waiting ${(afkDelay/1000).toFixed(1)}s before AFK command...`));
-                
-                setTimeout(async () => {
-                  if (this.bot && this.isConnected) {
-                    await this.startAFKSequence();
-                  }
-                }, afkDelay);
-                
-              } else {
-                console.log(chalk.yellow(`⚠️ [${this.email}] Bot client not ready for commands`));
-                await Database.logEvent(this.email, 'WARNING', 'Bot client not ready for commands');
+          if (this.silentMode) {
+            console.log(chalk.yellow(`🔇 [${this.email}] Silent mode active - no commands will be sent`));
+            await Database.logEvent(this.email, 'INFO', 'Connected in silent mode - no commands sent');
+          } else {
+            // Wait longer after spawn to appear more human-like (10-20 seconds)
+            const initialDelay = Math.random() * 10000 + 10000; // Random delay between 10-20 seconds
+            console.log(chalk.magenta(`⏱️ [${this.email}] Waiting ${(initialDelay/1000).toFixed(1)}s to appear more natural...`));
+            
+            setTimeout(async () => {
+              try {
+                if (this.bot && this.bot._client && this.bot.chat && this.isConnected) {
+                  // Send team chat first
+                  this.bot.chat('/team chat');
+                  await Database.logEvent(this.email, 'INFO', 'Team chat command sent: /team chat');
+                  console.log(chalk.green(`✅ [${this.email}] Team chat command sent`));
+                  
+                  // Wait another random period before AFK (5-15 seconds)
+                  const afkDelay = Math.random() * 10000 + 5000;
+                  console.log(chalk.magenta(`⏱️ [${this.email}] Waiting ${(afkDelay/1000).toFixed(1)}s before AFK command...`));
+                  
+                  setTimeout(async () => {
+                    if (this.bot && this.isConnected) {
+                      await this.startAFKSequence();
+                    }
+                  }, afkDelay);
+                  
+                } else {
+                  console.log(chalk.yellow(`⚠️ [${this.email}] Bot client not ready for commands`));
+                  await Database.logEvent(this.email, 'WARNING', 'Bot client not ready for commands');
+                }
+              } catch (err) {
+                console.log(chalk.yellow(`⚠️ [${this.email}] Failed to send commands: ${err.message}`));
+                await Database.logEvent(this.email, 'WARNING', `Failed to send commands: ${err.message}`);
               }
-            } catch (err) {
-              console.log(chalk.yellow(`⚠️ [${this.email}] Failed to send commands: ${err.message}`));
-              await Database.logEvent(this.email, 'WARNING', `Failed to send commands: ${err.message}`);
-            }
-          }, initialDelay);
+            }, initialDelay);
+          }
           
-          // Initialize addon features after successful spawn
+          // Initialize addon features after successful spawn (regardless of silent mode)
           this.addon = new AddonFeatures(this.bot, this.email);
           
           resolve(this.bot);
