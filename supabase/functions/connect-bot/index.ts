@@ -111,9 +111,10 @@ Deno.serve(async (req) => {
     )
 
     console.log(`📥 Received connection request`)
-    const { email, serverIp, serverPort } = await req.json()
+    const { email, password, serverIp, serverPort } = await req.json()
     console.log(`📧 Email: ${email}`)
     console.log(`🌐 Server: ${serverIp}:${serverPort}`)
+    console.log(`🔑 Password provided: ${password ? 'Yes' : 'No'}`)
 
     console.log(`🔍 Looking up account details for ${email}...`)
     const { data: account, error: accountError } = await supabase
@@ -155,7 +156,10 @@ Deno.serve(async (req) => {
     const backgroundTask = async () => {
       try {
         console.log(`🚀 Starting background connection task for ${email}`)
-        const bot = await createMinecraftBot(email, account.password, serverIp, serverPort)
+        // Use password from request if provided, otherwise use account password
+        const botPassword = password || account.password
+        console.log(`🔑 Using password from: ${password ? 'request' : 'database'}`)
+        const bot = await createMinecraftBot(email, botPassword, serverIp, serverPort)
         
         console.log(`📊 Updating database - marking ${email} as connected`)
         await supabase
