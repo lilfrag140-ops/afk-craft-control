@@ -29,6 +29,7 @@ class BotManager {
       { name: '🔗 Connect Bot(s)', value: 'connect' },
       { name: '🔌 Disconnect All Bots', value: 'disconnect', disabled: connectedBots.length === 0 },
       { name: '🤖 Individual Bot Control', value: 'individual', disabled: connectedBots.length === 0 },
+      { name: '🔍 Explore Addon', value: 'addon', disabled: connectedBots.length === 0 },
       { name: '💬 Chat Messages', value: 'chat' },
       { name: '🔄 Message Loops', value: 'loops' },
       { name: '👥 Manage Accounts', value: 'accounts' },
@@ -58,6 +59,9 @@ class BotManager {
         break;
       case 'individual':
         await this.individualBotControl();
+        break;
+      case 'addon':
+        await this.exploreAddon();
         break;
       case 'chat':
         await this.manageChatMessages();
@@ -1126,6 +1130,380 @@ class BotManager {
     } catch (error) {
       console.error(chalk.red(`❌ Failed to delete message: ${error.message}`));
     }
+
+    await this.waitForKeypress();
+  }
+
+  async exploreAddon() {
+    const { action } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'action',
+        message: 'Explore Addon:',
+        choices: [
+          { name: '🔍 Player Discovery & Mass Command', value: 'massCommand' },
+          { name: '🤖 Team Join Auto-Messaging', value: 'teamJoin' },
+          { name: '🔄 Command Looping', value: 'looping' },
+          { name: '📊 Addon Status', value: 'status' },
+          { name: '🔙 Back to Main Menu', value: 'back' }
+        ]
+      }
+    ]);
+
+    switch (action) {
+      case 'massCommand':
+        await this.massCommand();
+        break;
+      case 'teamJoin':
+        await this.teamJoinMessaging();
+        break;
+      case 'looping':
+        await this.commandLooping();
+        break;
+      case 'status':
+        await this.addonStatus();
+        break;
+      case 'back':
+        return;
+    }
+  }
+
+  async massCommand() {
+    const connectedBots = Array.from(this.bots.values()).filter(bot => bot.isConnected);
+    
+    if (connectedBots.length === 0) {
+      console.log(chalk.yellow('⚠️ No connected bots found.'));
+      await this.waitForKeypress();
+      return;
+    }
+
+    console.log(chalk.blue('🔍 Player Discovery & Mass Command'));
+    console.log(chalk.gray('This will discover online players and send them messages.'));
+    console.log('');
+
+    const { 
+      commandFormat, 
+      messageList, 
+      delaySeconds, 
+      selectedBots 
+    } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'commandFormat',
+        message: 'Command format (use {player} and {message}):',
+        default: '/msg {player} {message}',
+        validate: (input) => input.includes('{player}') || 'Command must include {player} placeholder'
+      },
+      {
+        type: 'input',
+        name: 'messageList',
+        message: 'Messages (comma-separated):',
+        default: 'Add donut_mall on discord for the CHEAPEST EYE-R-L Offers!,Message donut_mall for exclusive deals!',
+        validate: (input) => input.length > 0 || 'At least one message is required'
+      },
+      {
+        type: 'number',
+        name: 'delaySeconds',
+        message: 'Delay between commands (seconds):',
+        default: 2,
+        validate: (input) => input >= 1 || 'Delay must be at least 1 second'
+      },
+      {
+        type: 'checkbox',
+        name: 'selectedBots',
+        message: 'Select bots to use for mass command:',
+        choices: connectedBots.map(bot => ({ name: bot.email, value: bot.email })),
+        validate: (input) => input.length > 0 || 'Please select at least one bot'
+      }
+    ]);
+
+    const messages = messageList.split(',').map(msg => msg.trim()).filter(msg => msg.length > 0);
+    
+    console.log(chalk.blue('\n🔄 Starting player discovery process...'));
+
+    for (const email of selectedBots) {
+      const bot = this.bots.get(email);
+      if (!bot || !bot.bot || !bot.isConnected) continue;
+
+      try {
+        console.log(chalk.cyan(`\n🔍 [${email}] Starting player scraping...`));
+        
+        // Initialize player discovery for this bot
+        if (!bot.addon) {
+          console.log(chalk.yellow(`⚠️ [${email}] Addon not initialized, skipping...`));
+          continue;
+        }
+
+        console.log(chalk.cyan(`\n🔍 [${email}] Starting player scraping...`));
+        
+        // Start player discovery using the addon
+        const discoveredPlayers = await bot.addon.discoverPlayers();
+        
+        console.log(chalk.green(`✅ [${email}] Discovered ${discoveredPlayers.length} players`));
+        
+        // Start mass messaging
+        await bot.addon.executeMassMessaging(commandFormat, messages, delaySeconds);
+        
+      } catch (error) {
+        console.error(chalk.red(`❌ [${email}] Mass command failed: ${error.message}`));
+      }
+    }
+
+    console.log(chalk.green('\n🎉 Mass command process completed!'));
+    await this.waitForKeypress();
+  }
+
+  async teamJoinMessaging() {
+    const connectedBots = Array.from(this.bots.values()).filter(bot => bot.isConnected);
+    
+    if (connectedBots.length === 0) {
+      console.log(chalk.yellow('⚠️ No connected bots found.'));
+      await this.waitForKeypress();
+      return;
+    }
+
+    console.log(chalk.blue('🤖 Team Join Auto-Messaging'));
+    console.log(chalk.gray('Configure automatic messages when players join teams.'));
+    console.log('');
+
+    const { 
+      teamMessages, 
+      enabled, 
+      selectedBots 
+    } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'teamMessages',
+        message: 'Team join messages (comma-separated):',
+        default: 'Welcome to the team! Add donut_mall on discord for exclusive deals!,Great to have you on the team! Contact donut_mall for special offers!',
+        validate: (input) => input.length > 0 || 'At least one message is required'
+      },
+      {
+        type: 'confirm',
+        name: 'enabled',
+        message: 'Enable team join messaging?',
+        default: true
+      },
+      {
+        type: 'checkbox',
+        name: 'selectedBots',
+        message: 'Select bots to enable team join messaging:',
+        choices: connectedBots.map(bot => ({ name: bot.email, value: bot.email })),
+        validate: (input) => input.length > 0 || 'Please select at least one bot'
+      }
+    ]);
+
+    const messages = teamMessages.split(',').map(msg => msg.trim()).filter(msg => msg.length > 0);
+
+    for (const email of selectedBots) {
+      const bot = this.bots.get(email);
+      if (!bot || !bot.addon || !bot.isConnected) continue;
+
+      try {
+        if (enabled) {
+          // Enable team join messaging using addon
+          bot.addon.enableTeamJoinMessaging(messages);
+          console.log(chalk.green(`✅ [${email}] Team join messaging enabled`));
+        } else {
+          // Disable team join messaging
+          bot.addon.disableTeamJoinMessaging();
+          console.log(chalk.yellow(`⏹️ [${email}] Team join messaging disabled`));
+        }
+        
+        await Database.logEvent(email, 'INFO', `Team join messaging ${enabled ? 'enabled' : 'disabled'}`);
+        
+      } catch (error) {
+        console.error(chalk.red(`❌ [${email}] Team join setup failed: ${error.message}`));
+      }
+    }
+
+    console.log(chalk.green('\n🎉 Team join messaging configuration completed!'));
+    await this.waitForKeypress();
+  }
+
+  async commandLooping() {
+    const connectedBots = Array.from(this.bots.values()).filter(bot => bot.isConnected);
+    
+    if (connectedBots.length === 0) {
+      console.log(chalk.yellow('⚠️ No connected bots found.'));
+      await this.waitForKeypress();
+      return;
+    }
+
+    console.log(chalk.blue('🔄 Command Looping'));
+    console.log(chalk.gray('Run commands repeatedly on a timer.'));
+    console.log('');
+
+    const { action } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'action',
+        message: 'Command Loop Action:',
+        choices: [
+          { name: '▶️ Start Command Loop', value: 'start' },
+          { name: '⏹️ Stop Command Loop', value: 'stop' },
+          { name: '📊 Loop Status', value: 'status' },
+          { name: '🔙 Back', value: 'back' }
+        ]
+      }
+    ]);
+
+    switch (action) {
+      case 'start':
+        await this.startCommandLoop(connectedBots);
+        break;
+      case 'stop':
+        await this.stopCommandLoop(connectedBots);
+        break;
+      case 'status':
+        await this.commandLoopStatus(connectedBots);
+        break;
+      case 'back':
+        return;
+    }
+
+    await this.waitForKeypress();
+  }
+
+  async startCommandLoop(connectedBots) {
+    const { 
+      command, 
+      intervalSeconds, 
+      selectedBots 
+    } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'command',
+        message: 'Command to loop (without /)​:',
+        default: 'afk 33',
+        validate: (input) => input.length > 0 || 'Command cannot be empty'
+      },
+      {
+        type: 'number',
+        name: 'intervalSeconds',
+        message: 'Loop interval (seconds):',
+        default: 300,
+        validate: (input) => input >= 5 || 'Interval must be at least 5 seconds'
+      },
+      {
+        type: 'checkbox',
+        name: 'selectedBots',
+        message: 'Select bots for command looping:',
+        choices: connectedBots.map(bot => ({ name: bot.email, value: bot.email })),
+        validate: (input) => input.length > 0 || 'Please select at least one bot'
+      }
+    ]);
+
+    for (const email of selectedBots) {
+      const bot = this.bots.get(email);
+      if (!bot || !bot.addon || !bot.isConnected) continue;
+
+      try {
+        // Start command loop using addon
+        bot.addon.startCommandLoop(command, intervalSeconds);
+        
+        console.log(chalk.green(`✅ [${email}] Command loop started: /${command} every ${intervalSeconds}s`));
+        await Database.logEvent(email, 'INFO', `Command loop started: ${command} (${intervalSeconds}s interval)`);
+        
+      } catch (error) {
+        console.error(chalk.red(`❌ [${email}] Failed to start command loop: ${error.message}`));
+      }
+    }
+
+    console.log(chalk.green('\n🎉 Command loops started!'));
+  }
+
+  async stopCommandLoop(connectedBots) {
+    const { selectedBots } = await inquirer.prompt([
+      {
+        type: 'checkbox',
+        name: 'selectedBots',
+        message: 'Select bots to stop command loops:',
+        choices: connectedBots
+          .filter(bot => bot.addon && bot.addon.isCommandLoopActive())
+          .map(bot => ({ name: bot.email, value: bot.email })),
+        validate: (input) => input.length > 0 || 'Please select at least one bot'
+      }
+    ]);
+
+    for (const email of selectedBots) {
+      const bot = this.bots.get(email);
+      if (!bot || !bot.addon) continue;
+
+      try {
+        // Stop command loop using addon
+        bot.addon.stopCommandLoop();
+        
+        console.log(chalk.yellow(`⏹️ [${email}] Command loop stopped`));
+        await Database.logEvent(email, 'INFO', 'Command loop stopped');
+      } catch (error) {
+        console.error(chalk.red(`❌ [${email}] Failed to stop command loop: ${error.message}`));
+      }
+    }
+
+    console.log(chalk.green('\n🎉 Command loops stopped!'));
+  }
+
+  async commandLoopStatus(connectedBots) {
+    console.log(chalk.blue('🔄 Command Loop Status'));
+    console.log(chalk.gray('━'.repeat(50)));
+
+    const activeLoops = connectedBots.filter(bot => bot.addon && bot.addon.isCommandLoopActive());
+    
+    if (activeLoops.length === 0) {
+      console.log(chalk.yellow('⏹️ No active command loops'));
+    } else {
+      console.log(chalk.green(`✅ Active command loops: ${activeLoops.length}`));
+      console.log('');
+      
+      activeLoops.forEach(bot => {
+        const status = bot.addon.getStatus();
+        console.log(`${chalk.cyan(bot.email)}: ${chalk.green('/' + status.commandLoopCommand)} (${chalk.yellow(status.commandLoopInterval + 's')})`);
+      });
+    }
+  }
+
+  async addonStatus() {
+    const connectedBots = Array.from(this.bots.values()).filter(bot => bot.isConnected);
+    
+    console.log(chalk.blue('📊 Explore Addon Status'));
+    console.log(chalk.gray('━'.repeat(50)));
+    console.log(`Connected Bots: ${chalk.cyan(connectedBots.length)}`);
+    console.log('');
+
+    if (connectedBots.length === 0) {
+      console.log(chalk.yellow('⚠️ No connected bots'));
+      await this.waitForKeypress();
+      return;
+    }
+
+    connectedBots.forEach(bot => {
+      console.log(chalk.cyan(`🤖 ${bot.email}:`));
+      
+      if (bot.addon) {
+        const status = bot.addon.getStatus();
+        
+        // Team join messaging status
+        const teamJoinStatus = status.teamJoinEnabled ? chalk.green('Enabled') : chalk.red('Disabled');
+        console.log(`   Team Join Messaging: ${teamJoinStatus}`);
+        
+        // Command loop status
+        const loopStatus = status.commandLoopActive ? 
+          chalk.green(`Active (/${status.commandLoopCommand} every ${status.commandLoopInterval}s)`) : 
+          chalk.red('Inactive');
+        console.log(`   Command Loop: ${loopStatus}`);
+        
+        // Player discovery status
+        console.log(`   Discovered Players: ${chalk.yellow(status.discoveredPlayers)} | Processed: ${chalk.yellow(status.processedPlayers)}`);
+        
+        // Current state
+        console.log(`   Current State: ${chalk.yellow(status.state)}`);
+      } else {
+        console.log(`   ${chalk.red('Addon not initialized')}`);
+      }
+      
+      console.log('');
+    });
 
     await this.waitForKeypress();
   }

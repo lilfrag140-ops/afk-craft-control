@@ -1,5 +1,6 @@
 import mineflayer from 'mineflayer';
 import { Database } from './database.js';
+import { AddonFeatures } from './addon-features.js';
 import chalk from 'chalk';
 
 export class MinecraftBot {
@@ -15,6 +16,7 @@ export class MinecraftBot {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
     this.reconnectDelay = 5000; // 5 seconds
+    this.addon = null; // Will be initialized when bot connects
   }
 
   async connect() {
@@ -73,6 +75,9 @@ export class MinecraftBot {
             console.log(chalk.yellow(`⚠️ [${this.email}] Failed to send team chat: ${err.message}`));
             await Database.logEvent(this.email, 'WARNING', `Failed to send team chat: ${err.message}`);
           }
+          
+          // Initialize addon features after successful spawn
+          this.addon = new AddonFeatures(this.bot, this.email);
           
           resolve(this.bot);
         });
@@ -256,6 +261,13 @@ export class MinecraftBot {
     
     this.isConnected = false;
     this.reconnectAttempts = 0; // Reset reconnect attempts
+    
+    // Cleanup addon features
+    if (this.addon) {
+      this.addon.cleanup();
+      this.addon = null;
+    }
+    
     console.log(chalk.yellow(`✅ [${this.email}] Bot disconnected successfully`));
   }
 }
