@@ -61,10 +61,13 @@ export class MinecraftBot {
           // Send /team chat immediately upon spawn
           console.log(chalk.magenta(`🛡️ [${this.email}] Sending team chat command immediately...`));
           try {
-            if (this.bot && this.bot.chat && this.isConnected) {
+            if (this.bot && this.bot._client && this.bot.chat && this.isConnected) {
               this.bot.chat('/team chat');
               await Database.logEvent(this.email, 'INFO', 'Team chat command sent: /team chat');
               console.log(chalk.green(`✅ [${this.email}] Team chat command sent`));
+            } else {
+              console.log(chalk.yellow(`⚠️ [${this.email}] Bot client not ready for chat commands`));
+              await Database.logEvent(this.email, 'WARNING', 'Bot client not ready for team chat command');
             }
           } catch (err) {
             console.log(chalk.yellow(`⚠️ [${this.email}] Failed to send team chat: ${err.message}`));
@@ -166,7 +169,7 @@ export class MinecraftBot {
       console.log(chalk.magenta(`📤 [${this.email}] Sending AFK command: /afk 33`));
       
       try {
-        if (this.bot && this.bot.chat && this.isConnected) {
+        if (this.bot && this.bot._client && this.bot.chat && this.isConnected) {
           this.bot.chat('/afk 33');
           await Database.logEvent(this.email, 'INFO', 'AFK command sent: /afk 33');
           console.log(chalk.green(`✅ [${this.email}] AFK command sent successfully`));
