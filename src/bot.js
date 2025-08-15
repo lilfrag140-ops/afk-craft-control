@@ -166,8 +166,10 @@ class BotManager {
         name: 'action',
         message: 'Account Management:',
         choices: [
-          { name: '➕ Add Account', value: 'add' },
+          { name: '➕ Add Single Account', value: 'add' },
+          { name: '📁 Load Accounts from File', value: 'loadFile' },
           { name: '📋 List Accounts', value: 'list' },
+          { name: '🗑️ Remove Account', value: 'remove' },
           { name: '🔙 Back to Main Menu', value: 'back' }
         ]
       }
@@ -177,8 +179,14 @@ class BotManager {
       case 'add':
         await this.addAccount();
         break;
+      case 'loadFile':
+        await this.loadAccountsFromFile();
+        break;
       case 'list':
         await this.listAccounts();
+        break;
+      case 'remove':
+        await this.removeAccount();
         break;
       case 'back':
         return;
@@ -210,6 +218,160 @@ class BotManager {
       console.log(chalk.green(`✅ Account ${email} added successfully!`));
     } catch (error) {
       console.error(chalk.red(`❌ Failed to add account: ${error.message}`));
+    }
+
+    await this.waitForKeypress();
+  }
+
+  async loadAccountsFromFile() {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const filePath = 'accounts.txt';
+      
+      if (!fs.existsSync(filePath)) {
+        console.log(chalk.yellow('⚠️ accounts.txt file not found!'));
+        console.log(chalk.gray('Please create an accounts.txt file with the format:'));
+        console.log(chalk.gray('email:password'));
+        console.log(chalk.gray('email2:password2'));
+        console.log(chalk.gray('...'));
+        await this.waitForKeypress();
+        return;
+      }
+
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      const lines = fileContent.split('\n').filter(line => line.trim().length > 0);
+      
+      if (lines.length === 0) {
+        console.log(chalk.yellow('⚠️ accounts.txt is empty!'));
+        await this.waitForKeypress();
+        return;
+      }
+
+      console.log(chalk.blue(`📁 Found ${lines.length} accounts in file`));
+      
+      const { confirm } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'confirm',
+          message: `Load ${lines.length} accounts from accounts.txt?`,
+          default: true
+        }
+      ]);
+
+      if (!confirm) {
+        console.log(chalk.yellow('❌ Operation cancelled.'));
+        await this.waitForKeypress();
+        return;
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+
+      console.log(chalk.blue('🔄 Processing accounts...'));
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        if (!line.includes(':')) {
+          console.log(chalk.red(`❌ Line ${i + 1}: Invalid format - missing ':' separator`));
+          failCount++;
+          continue;
+        }
+
+        const [email, password] = line.split(':');
+        
+        if (!email || !password) {
+          console.log(chalk.red(`❌ Line ${i + 1}: Invalid format - missing email or password`));
+          failCount++;
+          continue;
+        }
+
+        if (!email.includes('@')) {
+          console.log(chalk.red(`❌ Line ${i + 1}: Invalid email format - ${email}`));
+          failCount++;
+          continue;
+        }
+
+        try {
+          await Database.addAccount(email.trim(), password.trim());
+          console.log(chalk.green(`✅ Added: ${email.trim()}`));
+          successCount++;
+        } catch (error) {
+          console.log(chalk.red(`❌ Failed to add ${email.trim()}: ${error.message}`));
+          failCount++;
+        }
+      }
+
+      console.log('');
+      console.log(chalk.blue('📊 Import Summary:'));
+      console.log(`✅ Successfully added: ${chalk.green(successCount)} accounts`);
+      console.log(`❌ Failed: ${chalk.red(failCount)} accounts`);
+      console.log(`📁 Total processed: ${chalk.cyan(lines.length)} lines`);
+
+    } catch (error) {
+      console.error(chalk.red(`❌ Failed to load accounts from file: ${error.message}`));
+    }
+
+    await this.waitForKeypress();
+  }
+
+  async removeAccount() {
+    const accounts = await Database.getAccounts();
+    
+    if (accounts.length === 0) {
+      console.log(chalk.yellow('⚠️ No accounts found.'));
+      await this.waitForKeypress();
+      return;
+    }
+
+    const choices = accounts.map(account => ({
+      name: `${account.email} ${account.is_connected ? chalk.green('(Connected)') : chalk.red('(Disconnected)')}`,
+      value: account.email
+    }));
+
+    choices.push({ name: '🔙 Cancel', value: 'cancel' });
+
+    const { selectedAccount } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'selectedAccount',
+        message: 'Select account to remove:',
+        choices
+      }
+    ]);
+
+    if (selectedAccount === 'cancel') return;
+
+    const { confirm } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirm',
+        message: `Are you sure you want to remove ${selectedAccount}?`,
+        default: false
+      }
+    ]);
+
+    if (confirm) {
+      try {
+        // Disconnect bot if connected
+        if (this.bots.has(selectedAccount)) {
+          this.bots.get(selectedAccount).disconnect();
+          this.bots.delete(selectedAccount);
+        }
+
+        await Database.supabase
+          .from('accounts')
+          .delete()
+          .eq('email', selectedAccount);
+
+        console.log(chalk.green(`✅ Account ${selectedAccount} removed successfully!`));
+      } catch (error) {
+        console.error(chalk.red(`❌ Failed to remove account: ${error.message}`));
+      }
+    } else {
+      console.log(chalk.yellow('❌ Operation cancelled.'));
     }
 
     await this.waitForKeypress();
