@@ -8,6 +8,7 @@ const corsHeaders = {
 // Dynamic import for mineflayer
 async function createMinecraftBot(email: string, password: string, serverIp: string, serverPort: number) {
   console.log(`🔄 [${email}] Loading mineflayer module...`)
+  // Updated to version 4.31.0 for compatibility
   const mineflayer = await import('https://esm.sh/mineflayer@4.31.0')
   console.log(`✅ [${email}] Mineflayer module loaded successfully`)
   
