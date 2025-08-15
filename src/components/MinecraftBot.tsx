@@ -51,7 +51,7 @@ const MinecraftBot: React.FC = () => {
   // Logging utility
   const addLog = (level: LogEntry['level'], message: string, data?: any) => {
     const newLog: LogEntry = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Ensure unique IDs
       timestamp: new Date().toISOString(),
       level,
       message,
@@ -61,17 +61,54 @@ const MinecraftBot: React.FC = () => {
     console.log(`[${level.toUpperCase()}] ${message}`, data || '');
   };
 
-  // Load data from localStorage on mount
+  // Load accounts from Supabase database
+  const loadAccountsFromDatabase = async () => {
+    try {
+      console.log('🔄 Loading accounts from database...');
+      const { data: dbAccounts, error } = await supabase
+        .from('accounts')
+        .select('*');
+
+      if (error) {
+        console.error('❌ Failed to load accounts from database:', error);
+        addLog('error', `Failed to load accounts from database: ${error.message}`);
+        return;
+      }
+
+      if (dbAccounts && dbAccounts.length > 0) {
+        const accounts: Account[] = dbAccounts.map(account => ({
+          id: account.id,
+          email: account.email,
+          password: account.password,
+          isOnline: account.is_connected,
+          isSelected: account.is_selected,
+          lastActivity: account.last_connected_at 
+            ? `Last connected: ${new Date(account.last_connected_at).toLocaleString()}`
+            : 'Never connected',
+          connectionTime: 0,
+        }));
+        
+        setAccounts(accounts);
+        console.log(`✅ Loaded ${accounts.length} accounts from database`);
+        addLog('info', 'Loaded accounts from database', { count: accounts.length });
+      } else {
+        addLog('info', 'No accounts found in database');
+      }
+    } catch (error) {
+      console.error('💥 Unexpected error loading accounts:', error);
+      addLog('error', `Unexpected error loading accounts: ${error.message}`);
+    }
+  };
+
+  // Load data from localStorage and database on mount
   useEffect(() => {
-    const savedAccounts = localStorage.getItem('mcbot-accounts');
     const savedMessages = localStorage.getItem('mcbot-messages');
     const savedServer = localStorage.getItem('mcbot-server');
     const savedLoopSettings = localStorage.getItem('mcbot-loop-settings');
 
-    if (savedAccounts) {
-      setAccounts(JSON.parse(savedAccounts));
-      addLog('info', 'Loaded saved accounts from storage', { count: JSON.parse(savedAccounts).length });
-    }
+    // Load accounts from database instead of localStorage
+    loadAccountsFromDatabase();
+
     if (savedMessages) {
       setChatMessages(JSON.parse(savedMessages));
       addLog('info', 'Loaded saved chat messages from storage', { count: JSON.parse(savedMessages).length });
@@ -93,10 +130,10 @@ const MinecraftBot: React.FC = () => {
     });
   }, []);
 
-  // Save data to localStorage
-  useEffect(() => {
-    localStorage.setItem('mcbot-accounts', JSON.stringify(accounts));
-  }, [accounts]);
+  // Don't save accounts to localStorage anymore since we're using database
+  // useEffect(() => {
+  //   localStorage.setItem('mcbot-accounts', JSON.stringify(accounts));
+  // }, [accounts]);
 
   useEffect(() => {
     localStorage.setItem('mcbot-messages', JSON.stringify(chatMessages));
