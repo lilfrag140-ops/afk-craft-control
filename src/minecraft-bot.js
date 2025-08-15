@@ -60,9 +60,16 @@ export class MinecraftBot {
           
           // Send /team chat immediately upon spawn
           console.log(chalk.magenta(`🛡️ [${this.email}] Sending team chat command immediately...`));
-          this.bot.chat('/team chat');
-          await Database.logEvent(this.email, 'INFO', 'Team chat command sent: /team chat');
-          console.log(chalk.green(`✅ [${this.email}] Team chat command sent`));
+          try {
+            if (this.bot && this.bot.chat && this.isConnected) {
+              this.bot.chat('/team chat');
+              await Database.logEvent(this.email, 'INFO', 'Team chat command sent: /team chat');
+              console.log(chalk.green(`✅ [${this.email}] Team chat command sent`));
+            }
+          } catch (err) {
+            console.log(chalk.yellow(`⚠️ [${this.email}] Failed to send team chat: ${err.message}`));
+            await Database.logEvent(this.email, 'WARNING', `Failed to send team chat: ${err.message}`);
+          }
           
           resolve(this.bot);
         });
@@ -76,9 +83,18 @@ export class MinecraftBot {
           await Database.updateAccountStatus(this.email, 'disconnected', false);
           await Database.logEvent(this.email, 'ERROR', `Kicked: ${JSON.stringify(reason)}`);
           
+          // Check if it's an "already online" error and add extra delay
+          const reasonStr = JSON.stringify(reason);
+          const isAlreadyOnline = reasonStr.includes('already online') || reasonStr.includes('You are already online');
+          
           if (this.autoReconnect) {
             console.log(chalk.yellow(`🔄 [${this.email}] Auto-reconnect triggered...`));
-            await this.attemptReconnect();
+            if (isAlreadyOnline) {
+              console.log(chalk.yellow(`⏳ [${this.email}] Already online error detected, waiting longer...`));
+              setTimeout(() => this.attemptReconnect(), 15000); // 15 second delay for "already online"
+            } else {
+              this.attemptReconnect();
+            }
           }
           
           reject(new Error(`Kicked: ${JSON.stringify(reason)}`));
@@ -109,9 +125,10 @@ export class MinecraftBot {
           await Database.updateAccountStatus(this.email, 'disconnected', false);
           await Database.logEvent(this.email, 'INFO', `Bot disconnected: ${reason || 'Unknown'}`);
           
-          if (this.autoReconnect && reason !== 'disconnect') {
+          // Continue auto-reconnect even after user presses continue, unless manually disconnected
+          if (this.autoReconnect && reason !== 'disconnect' && reason !== 'manual') {
             console.log(chalk.yellow(`🔄 [${this.email}] Auto-reconnect triggered...`));
-            await this.attemptReconnect();
+            setTimeout(() => this.attemptReconnect(), 3000); // 3 second delay before reconnect
           }
         });
 
@@ -148,10 +165,18 @@ export class MinecraftBot {
       console.log(chalk.magenta(`💤 [${this.email}] Starting AFK sequence...`));
       console.log(chalk.magenta(`📤 [${this.email}] Sending AFK command: /afk 33`));
       
-      this.bot.chat('/afk 33');
-      await Database.logEvent(this.email, 'INFO', 'AFK command sent: /afk 33');
-      
-      console.log(chalk.green(`✅ [${this.email}] AFK command sent successfully`));
+      try {
+        if (this.bot && this.bot.chat && this.isConnected) {
+          this.bot.chat('/afk 33');
+          await Database.logEvent(this.email, 'INFO', 'AFK command sent: /afk 33');
+          console.log(chalk.green(`✅ [${this.email}] AFK command sent successfully`));
+        } else {
+          throw new Error('Bot not properly connected for chat commands');
+        }
+      } catch (err) {
+        console.log(chalk.yellow(`⚠️ [${this.email}] Failed to send AFK command: ${err.message}`));
+        await Database.logEvent(this.email, 'WARNING', `Failed to send AFK command: ${err.message}`);
+      }
       
       console.log(chalk.magenta(`🦘 [${this.email}] Setting up anti-kick jump mechanism (every 60 seconds)`));
       
@@ -222,11 +247,12 @@ export class MinecraftBot {
     }
     
     if (this.bot) {
-      this.bot.end();
+      this.bot.end('manual'); // Pass 'manual' as reason to prevent auto-reconnect
       this.bot = null;
     }
     
     this.isConnected = false;
+    this.reconnectAttempts = 0; // Reset reconnect attempts
     console.log(chalk.yellow(`✅ [${this.email}] Bot disconnected successfully`));
   }
 }
