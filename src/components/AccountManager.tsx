@@ -16,6 +16,7 @@ interface AccountManagerProps {
   onToggleSelection: (id: string) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
+  onSelectRange: (startIndex: number, endIndex: number) => void;
 }
 
 export const AccountManager: React.FC<AccountManagerProps> = ({
@@ -25,10 +26,13 @@ export const AccountManager: React.FC<AccountManagerProps> = ({
   onToggleSelection,
   onSelectAll,
   onDeselectAll,
+  onSelectRange,
 }) => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [rangeStart, setRangeStart] = useState('');
+  const [rangeEnd, setRangeEnd] = useState('');
 
   const handleAddAccount = () => {
     if (newEmail.trim() && newPassword.trim()) {
@@ -36,6 +40,17 @@ export const AccountManager: React.FC<AccountManagerProps> = ({
       setNewEmail('');
       setNewPassword('');
       setIsAddDialogOpen(false);
+    }
+  };
+
+  const handleSelectRange = () => {
+    const start = parseInt(rangeStart) - 1; // Convert to 0-based index
+    const end = parseInt(rangeEnd) - 1;
+    
+    if (start >= 0 && end >= 0 && start <= end && end < accounts.length) {
+      onSelectRange(start, end);
+      setRangeStart('');
+      setRangeEnd('');
     }
   };
 
@@ -58,80 +73,128 @@ export const AccountManager: React.FC<AccountManagerProps> = ({
 
       <CardContent className="space-y-4">
         {/* Action Buttons */}
-        <div className="flex flex-wrap gap-2">
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="default" size="sm" className="flex-1 min-w-0">
-                <UserPlus className="w-4 h-4 mr-2" />
-                Add Account
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-card border-border">
-              <DialogHeader>
-                <DialogTitle className="text-primary">Add New Account</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="minecraft@example.com"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    className="bg-input border-border"
-                  />
+        <div className="space-y-3">
+          {/* Primary Actions */}
+          <div className="flex flex-wrap gap-2">
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="default" size="sm" className="flex-1 min-w-0">
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Add Account
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-card border-border">
+                <DialogHeader>
+                  <DialogTitle className="text-primary">Add New Account</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="minecraft@example.com"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      className="bg-input border-border"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Enter password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="bg-input border-border"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handleAddAccount}
+                      className="flex-1"
+                      disabled={!newEmail.trim() || !newPassword.trim()}
+                    >
+                      Add Account
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsAddDialogOpen(false)}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Enter password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="bg-input border-border"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={handleAddAccount}
-                    className="flex-1"
-                    disabled={!newEmail.trim() || !newPassword.trim()}
-                  >
-                    Add Account
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setIsAddDialogOpen(false)}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Selection Controls */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onSelectAll}
+              disabled={accounts.length === 0}
+            >
+              <UserCheck className="w-4 h-4 mr-2" />
+              Select All
+            </Button>
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onDeselectAll}
+              disabled={selectedCount === 0}
+            >
+              <UserX className="w-4 h-4 mr-2" />
+              Clear All
+            </Button>
+          </div>
+
+          {/* Range Selection */}
+          <div className="bg-card-secondary rounded-lg p-3 border border-border space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground">Select Range</Label>
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <Input
+                  type="number"
+                  placeholder="From"
+                  value={rangeStart}
+                  onChange={(e) => setRangeStart(e.target.value)}
+                  className="bg-input border-border text-xs h-8"
+                  min="1"
+                  max={accounts.length.toString()}
+                />
               </div>
-            </DialogContent>
-          </Dialog>
-
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onSelectAll}
-            disabled={accounts.length === 0}
-          >
-            <UserCheck className="w-4 h-4 mr-2" />
-            Select All
-          </Button>
-
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onDeselectAll}
-            disabled={selectedCount === 0}
-          >
-            <UserX className="w-4 h-4 mr-2" />
-            Clear
-          </Button>
+              <span className="text-muted-foreground text-xs">to</span>
+              <div className="flex-1">
+                <Input
+                  type="number"
+                  placeholder="To"
+                  value={rangeEnd}
+                  onChange={(e) => setRangeEnd(e.target.value)}
+                  className="bg-input border-border text-xs h-8"
+                  min="1"
+                  max={accounts.length.toString()}
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSelectRange}
+                disabled={!rangeStart || !rangeEnd || accounts.length === 0}
+                className="h-8 px-3"
+              >
+                Select
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Select accounts from position {rangeStart || '?'} to {rangeEnd || '?'}
+            </div>
+          </div>
         </div>
 
         {/* Accounts List */}
@@ -147,7 +210,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({
               </div>
             ) : (
               <div className="p-2 space-y-2">
-                {accounts.map((account) => (
+                {accounts.map((account, index) => (
                   <div
                     key={account.id}
                     className={`
@@ -156,10 +219,15 @@ export const AccountManager: React.FC<AccountManagerProps> = ({
                       ${account.isSelected ? 'ring-2 ring-primary/50 bg-primary/5' : ''}
                     `}
                   >
-                    <Checkbox
-                      checked={account.isSelected}
-                      onCheckedChange={() => onToggleSelection(account.id)}
-                    />
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground font-mono min-w-[2rem]">
+                        #{index + 1}
+                      </span>
+                      <Checkbox
+                        checked={account.isSelected}
+                        onCheckedChange={() => onToggleSelection(account.id)}
+                      />
+                    </div>
                     
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -173,8 +241,8 @@ export const AccountManager: React.FC<AccountManagerProps> = ({
                           {account.isOnline ? 'Online' : 'Offline'}
                         </span>
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {account.password.replace(/./g, '•')}
+                      <div className="text-xs text-muted-foreground">
+                        {account.lastActivity || 'Never connected'}
                       </div>
                     </div>
 

@@ -11,11 +11,21 @@ export interface Account {
   password: string;
   isOnline: boolean;
   isSelected: boolean;
+  lastActivity?: string;
+  connectionTime?: number;
 }
 
-export interface Command {
+export interface ChatMessage {
   id: string;
   text: string;
+  targetAccounts: string[]; // Account IDs that should send this message
+  isEnabled: boolean;
+}
+
+export interface LoopSettings {
+  isEnabled: boolean;
+  delay: number; // delay between messages in ms
+  cycleDelay: number; // delay between complete cycles in ms
 }
 
 export interface ServerConfig {
@@ -25,25 +35,33 @@ export interface ServerConfig {
 
 const MinecraftBot: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [commands, setCommands] = useState<Command[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [serverConfig, setServerConfig] = useState<ServerConfig>({ ip: '', port: '25565' });
-  const [isLooping, setIsLooping] = useState(false);
-  const [commandDelay, setCommandDelay] = useState(1000);
+  const [loopSettings, setLoopSettings] = useState<LoopSettings>({
+    isEnabled: false,
+    delay: 1000,
+    cycleDelay: 5000
+  });
+  const [isLoopActive, setIsLoopActive] = useState(false);
 
   // Load data from localStorage on mount
   useEffect(() => {
     const savedAccounts = localStorage.getItem('mcbot-accounts');
-    const savedCommands = localStorage.getItem('mcbot-commands');
+    const savedMessages = localStorage.getItem('mcbot-messages');
     const savedServer = localStorage.getItem('mcbot-server');
+    const savedLoopSettings = localStorage.getItem('mcbot-loop-settings');
 
     if (savedAccounts) {
       setAccounts(JSON.parse(savedAccounts));
     }
-    if (savedCommands) {
-      setCommands(JSON.parse(savedCommands));
+    if (savedMessages) {
+      setChatMessages(JSON.parse(savedMessages));
     }
     if (savedServer) {
       setServerConfig(JSON.parse(savedServer));
+    }
+    if (savedLoopSettings) {
+      setLoopSettings(JSON.parse(savedLoopSettings));
     }
 
     // Welcome message
@@ -53,20 +71,22 @@ const MinecraftBot: React.FC = () => {
     });
   }, []);
 
-  // Save accounts to localStorage whenever they change
+  // Save data to localStorage
   useEffect(() => {
     localStorage.setItem('mcbot-accounts', JSON.stringify(accounts));
   }, [accounts]);
 
-  // Save commands to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('mcbot-commands', JSON.stringify(commands));
-  }, [commands]);
+    localStorage.setItem('mcbot-messages', JSON.stringify(chatMessages));
+  }, [chatMessages]);
 
-  // Save server config to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('mcbot-server', JSON.stringify(serverConfig));
   }, [serverConfig]);
+
+  useEffect(() => {
+    localStorage.setItem('mcbot-loop-settings', JSON.stringify(loopSettings));
+  }, [loopSettings]);
 
   const addAccount = (email: string, password: string) => {
     const newAccount: Account = {
@@ -75,6 +95,8 @@ const MinecraftBot: React.FC = () => {
       password,
       isOnline: false,
       isSelected: false,
+      lastActivity: 'Never connected',
+      connectionTime: 0,
     };
     setAccounts(prev => [...prev, newAccount]);
     toast({
@@ -107,6 +129,13 @@ const MinecraftBot: React.FC = () => {
     setAccounts(prev => prev.map(account => ({ ...account, isSelected: false })));
   };
 
+  const selectAccountRange = (startIndex: number, endIndex: number) => {
+    setAccounts(prev => prev.map((account, index) => ({
+      ...account,
+      isSelected: index >= startIndex && index <= endIndex ? true : account.isSelected
+    })));
+  };
+
   const connectSelectedAccounts = () => {
     const selectedAccounts = accounts.filter(account => account.isSelected);
     if (selectedAccounts.length === 0) {
@@ -131,7 +160,12 @@ const MinecraftBot: React.FC = () => {
     setAccounts(prev =>
       prev.map(account =>
         account.isSelected
-          ? { ...account, isOnline: true }
+          ? { 
+              ...account, 
+              isOnline: true, 
+              lastActivity: 'Connected',
+              connectionTime: Date.now()
+            }
           : account
       )
     );
@@ -165,7 +199,12 @@ const MinecraftBot: React.FC = () => {
     setAccounts(prev =>
       prev.map(account =>
         account.isSelected && account.isOnline
-          ? { ...account, isOnline: false }
+          ? { 
+              ...account, 
+              isOnline: false, 
+              lastActivity: 'Disconnected',
+              connectionTime: 0
+            }
           : account
       )
     );
@@ -176,73 +215,120 @@ const MinecraftBot: React.FC = () => {
     });
   };
 
-  const addCommand = () => {
-    const newCommand: Command = {
+  const addChatMessage = () => {
+    const newMessage: ChatMessage = {
       id: Date.now().toString(),
       text: '',
+      targetAccounts: [],
+      isEnabled: true,
     };
-    setCommands(prev => [...prev, newCommand]);
+    setChatMessages(prev => [...prev, newMessage]);
   };
 
-  const updateCommand = (id: string, text: string) => {
-    setCommands(prev =>
-      prev.map(command =>
-        command.id === id ? { ...command, text } : command
+  const updateChatMessage = (id: string, updates: Partial<ChatMessage>) => {
+    setChatMessages(prev =>
+      prev.map(message =>
+        message.id === id ? { ...message, ...updates } : message
       )
     );
   };
 
-  const removeCommand = (id: string) => {
-    setCommands(prev => prev.filter(command => command.id !== id));
+  const removeChatMessage = (id: string) => {
+    setChatMessages(prev => prev.filter(message => message.id !== id));
   };
 
-  const sendCommands = () => {
-    const selectedAccounts = accounts.filter(account => account.isSelected && account.isOnline);
-    const validCommands = commands.filter(command => command.text.trim());
-
-    if (selectedAccounts.length === 0) {
-      toast({
-        title: "No Online Accounts Selected",
-        description: "Please select at least one connected account",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (validCommands.length === 0) {
-      toast({
-        title: "No Commands to Send",
-        description: "Please add at least one command",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const assignSelectedAccountsToMessage = (messageId: string) => {
+    const selectedAccountIds = accounts
+      .filter(account => account.isSelected)
+      .map(account => account.id);
+    
+    updateChatMessage(messageId, { targetAccounts: selectedAccountIds });
+    
     toast({
-      title: "Sending Commands",
-      description: `Sending ${validCommands.length} command(s) from ${selectedAccounts.length} account(s)`,
+      title: "Accounts Assigned",
+      description: `${selectedAccountIds.length} account(s) assigned to this message`,
     });
+  };
 
-    // Simulate command sending with delay
-    validCommands.forEach((command, index) => {
-      setTimeout(() => {
-        console.log(`Sending command "${command.text}" from selected accounts`);
+  const startMessageLoop = async () => {
+    if (isLoopActive) return;
+    
+    const activeMessages = chatMessages.filter(msg => msg.isEnabled && msg.text.trim());
+    if (activeMessages.length === 0) {
+      toast({
+        title: "No Messages to Send",
+        description: "Please add and enable at least one message",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoopActive(true);
+    
+    const sendMessageCycle = async () => {
+      for (const message of activeMessages) {
+        const targetAccounts = accounts.filter(acc => 
+          message.targetAccounts.includes(acc.id) && acc.isOnline
+        );
         
-        if (index === validCommands.length - 1) {
+        if (targetAccounts.length > 0) {
+          console.log(`Sending "${message.text}" from accounts:`, targetAccounts.map(acc => acc.email));
+          
           toast({
-            title: "Commands Sent",
-            description: `All commands sent successfully${isLooping ? ' (will repeat)' : ''}`,
+            title: "Message Sent",
+            description: `"${message.text}" sent from ${targetAccounts.length} account(s)`,
           });
         }
-      }, index * commandDelay);
-    });
+        
+        // Wait for delay between messages
+        if (activeMessages.indexOf(message) < activeMessages.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, loopSettings.delay));
+        }
+      }
+      
+      // Wait for cycle delay before repeating
+      if (loopSettings.isEnabled && isLoopActive) {
+        await new Promise(resolve => setTimeout(resolve, loopSettings.cycleDelay));
+        if (isLoopActive) {
+          sendMessageCycle();
+        }
+      }
+    };
 
-    // If looping is enabled, schedule the next round
-    if (isLooping && validCommands.length > 0) {
-      setTimeout(() => {
-        sendCommands();
-      }, validCommands.length * commandDelay + 2000);
+    sendMessageCycle();
+  };
+
+  const stopMessageLoop = () => {
+    setIsLoopActive(false);
+    toast({
+      title: "Loop Stopped",
+      description: "Message loop has been stopped",
+    });
+  };
+
+  const sendSingleMessage = (messageId: string) => {
+    const message = chatMessages.find(msg => msg.id === messageId);
+    if (!message || !message.text.trim()) return;
+
+    const targetAccounts = accounts.filter(acc => 
+      message.targetAccounts.includes(acc.id) && acc.isOnline
+    );
+
+    if (targetAccounts.length === 0) {
+      toast({
+        title: "No Target Accounts",
+        description: "Please assign online accounts to this message",
+        variant: "destructive",
+      });
+      return;
     }
+
+    console.log(`Sending "${message.text}" from accounts:`, targetAccounts.map(acc => acc.email));
+    
+    toast({
+      title: "Message Sent",
+      description: `"${message.text}" sent from ${targetAccounts.length} account(s)`,
+    });
   };
 
   return (
@@ -269,6 +355,7 @@ const MinecraftBot: React.FC = () => {
               onToggleSelection={toggleAccountSelection}
               onSelectAll={selectAllAccounts}
               onDeselectAll={deselectAllAccounts}
+              onSelectRange={selectAccountRange}
             />
           </div>
 
@@ -284,18 +371,21 @@ const MinecraftBot: React.FC = () => {
             />
           </div>
 
-          {/* Command Panel */}
+          {/* Enhanced Chat Panel */}
           <div className="lg:col-span-2 xl:col-span-1">
             <CommandPanel
-              commands={commands}
-              onAddCommand={addCommand}
-              onUpdateCommand={updateCommand}
-              onRemoveCommand={removeCommand}
-              onSendCommands={sendCommands}
-              isLooping={isLooping}
-              onToggleLooping={setIsLooping}
-              commandDelay={commandDelay}
-              onDelayChange={setCommandDelay}
+              accounts={accounts}
+              chatMessages={chatMessages}
+              onAddChatMessage={addChatMessage}
+              onUpdateChatMessage={updateChatMessage}
+              onRemoveChatMessage={removeChatMessage}
+              onAssignSelectedAccounts={assignSelectedAccountsToMessage}
+              onSendSingleMessage={sendSingleMessage}
+              onStartLoop={startMessageLoop}
+              onStopLoop={stopMessageLoop}
+              loopSettings={loopSettings}
+              onLoopSettingsChange={setLoopSettings}
+              isLoopActive={isLoopActive}
             />
           </div>
 
