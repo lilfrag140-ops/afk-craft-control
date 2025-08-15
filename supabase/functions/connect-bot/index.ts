@@ -8,8 +8,8 @@ const corsHeaders = {
 // Dynamic import for mineflayer
 async function createMinecraftBot(email: string, password: string, serverIp: string, serverPort: number) {
   console.log(`🔄 [${email}] Loading mineflayer module...`)
-  // Using jsdelivr CDN to avoid caching issues with esm.sh
-  const mineflayer = await import('https://cdn.jsdelivr.net/npm/mineflayer@4.31.0/+esm')
+  // Using esm.sh with deno target and external dependencies
+  const mineflayer = await import('https://esm.sh/mineflayer@4.31.0?target=deno&external=perf_hooks,crypto,os,path,fs,util,events')
   console.log(`✅ [${email}] Mineflayer module loaded successfully`)
   
   console.log(`🚀 [${email}] Creating bot instance for ${serverIp}:${serverPort}`)
