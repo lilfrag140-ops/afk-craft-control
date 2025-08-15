@@ -6,6 +6,7 @@ import { StatusPanel } from './StatusPanel';
 import LogsConsole, { LogEntry } from './LogsConsole';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface Account {
   id: string;
@@ -160,7 +161,7 @@ const MinecraftBot: React.FC = () => {
     })));
   };
 
-  const connectSelectedAccounts = () => {
+  const connectSelectedAccounts = async () => {
     const selectedAccounts = accounts.filter(account => account.isSelected);
     if (selectedAccounts.length === 0) {
       addLog('error', 'Connection attempt failed: No accounts selected');
@@ -182,6 +183,10 @@ const MinecraftBot: React.FC = () => {
       return;
     }
 
+    console.log(`🚀 Starting connection process for ${selectedAccounts.length} accounts`);
+    console.log(`🎯 Target server: ${serverConfig.ip}:${serverConfig.port}`);
+    console.log(`📧 Accounts to connect:`, selectedAccounts.map(acc => acc.email));
+
     addLog('info', `Starting connection process for ${selectedAccounts.length} accounts`, {
       server: `${serverConfig.ip}:${serverConfig.port}`,
       accounts: selectedAccounts.map(acc => acc.email)
@@ -192,96 +197,106 @@ const MinecraftBot: React.FC = () => {
       description: `Connecting ${selectedAccounts.length} account(s) to ${serverConfig.ip}:${serverConfig.port}`,
     });
 
-    // Simulate realistic connection process with individual results
-    selectedAccounts.forEach((account, index) => {
-      setTimeout(() => {
-        // Simulate connection success/failure (90% success rate for realism)
-        const isSuccessful = Math.random() > 0.1;
+    // Connect each account using the Supabase Edge Function
+    for (const account of selectedAccounts) {
+      try {
+        console.log(`🔌 Attempting to connect ${account.email}...`);
         
-        setAccounts(prev =>
-          prev.map(acc =>
-            acc.id === account.id
-              ? { 
-                  ...acc, 
-                  isOnline: isSuccessful, 
-                  lastActivity: isSuccessful ? 'Connected' : 'Connection Failed',
-                  connectionTime: isSuccessful ? Date.now() : 0
-                }
-              : acc
-          )
-        );
+        const { data, error } = await supabase.functions.invoke('connect-bot', {
+          body: {
+            email: account.email,
+            password: account.password,
+            serverIp: serverConfig.ip,
+            serverPort: parseInt(serverConfig.port)
+          }
+        });
 
-        if (isSuccessful) {
-          addLog('success', `Account connected successfully: ${account.email}`, {
-            server: `${serverConfig.ip}:${serverConfig.port}`,
-            connectionTime: new Date().toISOString()
+        if (error) {
+          console.error(`❌ Connection failed for ${account.email}:`, error);
+          addLog('error', `Connection failed for ${account.email}: ${error.message}`);
+          toast({
+            title: "Connection Failed",
+            description: `Failed to connect ${account.email}: ${error.message}`,
+            variant: "destructive",
           });
         } else {
-          addLog('error', `Connection failed for account: ${account.email}`, {
-            server: `${serverConfig.ip}:${serverConfig.port}`,
-            reason: 'Authentication failed or server unreachable'
-          });
+          console.log(`✅ Connection initiated for ${account.email}:`, data);
+          addLog('success', `Connection initiated for ${account.email}`);
+          
+          // Update account status to connecting
+          setAccounts(prev =>
+            prev.map(acc =>
+              acc.id === account.id
+                ? { ...acc, isOnline: true, lastActivity: 'Connecting...', connectionTime: Date.now() }
+                : acc
+            )
+          );
         }
-
-        // Show final summary after last account
-        if (index === selectedAccounts.length - 1) {
-          setTimeout(() => {
-            const successfulConnections = selectedAccounts.filter(() => Math.random() > 0.1).length;
-            addLog('info', `Connection process completed`, {
-              total: selectedAccounts.length,
-              successful: successfulConnections,
-              failed: selectedAccounts.length - successfulConnections
-            });
-            toast({
-              title: "Connection Process Complete",
-              description: `${successfulConnections}/${selectedAccounts.length} account(s) connected successfully`,
-            });
-          }, 500);
-        }
-      }, 1000 + (index * 800)); // Stagger connections for realism
-    });
+      } catch (error) {
+        console.error(`💥 Unexpected error connecting ${account.email}:`, error);
+        addLog('error', `Unexpected error connecting ${account.email}: ${error.message}`);
+        toast({
+          title: "Connection Error",
+          description: `Unexpected error connecting ${account.email}`,
+          variant: "destructive",
+        });
+      }
+    }
   };
 
-  const disconnectSelectedAccounts = () => {
-    const selectedAccounts = accounts.filter(account => account.isSelected && account.isOnline);
-    if (selectedAccounts.length === 0) {
-      addLog('error', 'Disconnection attempt failed: No online accounts selected');
+  const disconnectSelectedAccounts = async () => {
+    const connectedAccounts = accounts.filter(account => account.isSelected && account.isOnline);
+    if (connectedAccounts.length === 0) {
+      addLog('warning', 'Disconnect attempt: No connected accounts selected');
       toast({
-        title: "No Online Accounts Selected",
-        description: "Please select at least one online account to disconnect",
+        title: "No Connected Accounts",
+        description: "Please select connected accounts to disconnect",
         variant: "destructive",
       });
       return;
     }
 
-    addLog('info', `Disconnecting ${selectedAccounts.length} accounts`, {
-      accounts: selectedAccounts.map(acc => acc.email)
-    });
-
-    // Update account status to offline
-    setAccounts(prev =>
-      prev.map(account =>
-        account.isSelected && account.isOnline
-          ? { 
-              ...account, 
-              isOnline: false, 
-              lastActivity: 'Disconnected',
-              connectionTime: 0
-            }
-          : account
-      )
-    );
-
-    selectedAccounts.forEach(account => {
-      addLog('success', `Account disconnected: ${account.email}`, {
-        disconnectionTime: new Date().toISOString()
-      });
-    });
-
+    console.log(`🔌 Disconnecting ${connectedAccounts.length} accounts`);
+    addLog('info', `Disconnecting ${connectedAccounts.length} accounts`);
     toast({
-      title: "Accounts Disconnected",
-      description: `${selectedAccounts.length} account(s) disconnected from server`,
+      title: "Disconnecting Accounts",
+      description: `Disconnecting ${connectedAccounts.length} account(s)`,
     });
+
+    for (const account of connectedAccounts) {
+      try {
+        console.log(`🔌 Disconnecting ${account.email}...`);
+        
+        const { data, error } = await supabase.functions.invoke('disconnect-bot', {
+          body: {
+            email: account.email
+          }
+        });
+
+        if (error) {
+          console.error(`❌ Disconnection failed for ${account.email}:`, error);
+          addLog('error', `Disconnection failed for ${account.email}: ${error.message}`);
+        } else {
+          console.log(`✅ Disconnection initiated for ${account.email}:`, data);
+          addLog('info', `Disconnected: ${account.email}`, {
+            accountId: account.id,
+            connectionDuration: account.connectionTime ? Date.now() - account.connectionTime : 0
+          });
+
+          // Update account status
+          setAccounts(prev =>
+            prev.map(acc =>
+              acc.id === account.id
+                ? { ...acc, isOnline: false, lastActivity: `Disconnected at ${new Date().toLocaleTimeString()}`, connectionTime: 0 }
+                : acc
+            )
+          );
+        }
+      } catch (error) {
+        console.error(`💥 Unexpected error disconnecting ${account.email}:`, error);
+        addLog('error', `Unexpected error disconnecting ${account.email}: ${error.message}`);
+      }
+    }
   };
 
   const addChatMessage = () => {
