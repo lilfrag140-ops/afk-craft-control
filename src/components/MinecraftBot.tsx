@@ -201,6 +201,12 @@ const MinecraftBot: React.FC = () => {
     for (const account of selectedAccounts) {
       try {
         console.log(`🔌 Attempting to connect ${account.email}...`);
+        console.log(`📦 Request payload:`, {
+          email: account.email,
+          password: account.password ? '***hidden***' : 'NOT_PROVIDED',
+          serverIp: serverConfig.ip,
+          serverPort: parseInt(serverConfig.port)
+        });
         
         const { data, error } = await supabase.functions.invoke('connect-bot', {
           body: {
@@ -211,8 +217,17 @@ const MinecraftBot: React.FC = () => {
           }
         });
 
+        console.log(`📡 Supabase response for ${account.email}:`, { data, error });
+
         if (error) {
-          console.error(`❌ Connection failed for ${account.email}:`, error);
+          console.error(`❌ Supabase error for ${account.email}:`, error);
+          console.error(`🔍 Error details:`, {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          });
+          
           addLog('error', `Connection failed for ${account.email}: ${error.message}`);
           toast({
             title: "Connection Failed",
@@ -234,10 +249,15 @@ const MinecraftBot: React.FC = () => {
         }
       } catch (error) {
         console.error(`💥 Unexpected error connecting ${account.email}:`, error);
+        console.error(`🔍 Error type:`, typeof error);
+        console.error(`🔍 Error constructor:`, error.constructor.name);
+        console.error(`🔍 Error stack:`, error.stack);
+        console.error(`🔍 Error JSON:`, JSON.stringify(error, null, 2));
+        
         addLog('error', `Unexpected error connecting ${account.email}: ${error.message}`);
         toast({
           title: "Connection Error",
-          description: `Unexpected error connecting ${account.email}`,
+          description: `Unexpected error connecting ${account.email}: ${error.message}`,
           variant: "destructive",
         });
       }

@@ -99,22 +99,72 @@ async function runAfkSequence(bot: any, email: string) {
 }
 
 Deno.serve(async (req) => {
+  console.log(`🌟 =============== NEW REQUEST ===============`)
+  console.log(`📅 Request timestamp: ${new Date().toISOString()}`)
+  console.log(`🔧 Request method: ${req.method}`)
+  console.log(`📍 Request URL: ${req.url}`)
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log(`✅ Handling CORS preflight request`)
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
+    console.log(`🔧 Creating Supabase client...`)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    console.log(`🔍 SUPABASE_URL exists: ${!!supabaseUrl}`)
+    console.log(`🔍 SUPABASE_SERVICE_ROLE_KEY exists: ${!!supabaseKey}`)
+    
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      supabaseUrl ?? '',
+      supabaseKey ?? ''
     )
+    console.log(`✅ Supabase client created successfully`)
+
+    console.log(`📥 Parsing request body...`)
+    let requestBody;
+    try {
+      requestBody = await req.json()
+      console.log(`✅ Request body parsed successfully`)
+    } catch (parseError) {
+      console.error(`💥 Failed to parse request body:`, parseError)
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON in request body', details: parseError.message }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     console.log(`📥 Received connection request`)
-    const { email, password, serverIp, serverPort } = await req.json()
+    const { email, password, serverIp, serverPort } = requestBody
     console.log(`📧 Email: ${email}`)
     console.log(`🌐 Server: ${serverIp}:${serverPort}`)
     console.log(`🔑 Password provided: ${password ? 'Yes' : 'No'}`)
+    console.log(`🔍 Request body keys: ${Object.keys(requestBody).join(', ')}`)
+
+    // Validate required parameters
+    if (!email) {
+      console.error(`❌ Missing required parameter: email`)
+      return new Response(
+        JSON.stringify({ error: 'Missing required parameter: email' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    if (!serverIp) {
+      console.error(`❌ Missing required parameter: serverIp`)
+      return new Response(
+        JSON.stringify({ error: 'Missing required parameter: serverIp' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    if (!serverPort) {
+      console.error(`❌ Missing required parameter: serverPort`)
+      return new Response(
+        JSON.stringify({ error: 'Missing required parameter: serverPort' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     console.log(`🔍 Looking up account details for ${email}...`)
     const { data: account, error: accountError } = await supabase
@@ -242,10 +292,23 @@ Deno.serve(async (req) => {
     )
 
   } catch (error) {
+    console.error('🚨 =============== EDGE FUNCTION ERROR ===============')
     console.error('💥 Edge function error:', error.message)
-    console.error('🔍 Full error details:', error)
+    console.error('🔍 Error type:', typeof error)
+    console.error('🔍 Error constructor:', error.constructor.name)
+    console.error('🔍 Error stack:', error.stack)
+    console.error('🔍 Full error object:', error)
+    console.error('🔍 Error JSON:', JSON.stringify(error, null, 2))
+    console.error('📅 Error timestamp:', new Date().toISOString())
+    console.error('🚨 =============== END ERROR LOG ===============')
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message || 'Unknown error occurred',
+        type: error.constructor.name,
+        timestamp: new Date().toISOString(),
+        details: error.stack
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
