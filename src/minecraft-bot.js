@@ -36,7 +36,17 @@ export class MinecraftBot {
         hideErrors: true, // Hide packet errors that interfere with CLI
         checkTimeoutInterval: 30 * 1000,
         keepAlive: true,
-        logErrors: false // Disable error logging to console
+        logErrors: false, // Disable error logging to console
+        // Add connection options to reduce detection
+        clientToken: require('crypto').randomUUID(),
+        session: {
+          accessToken: '',
+          clientToken: require('crypto').randomUUID(),
+          selectedProfile: {
+            id: require('crypto').randomUUID(),
+            name: this.email
+          }
+        }
       });
 
       return new Promise((resolve, reject) => {
@@ -60,21 +70,25 @@ export class MinecraftBot {
           await Database.updateAccountStatus(this.email, 'connected', true);
           await Database.logEvent(this.email, 'SUCCESS', 'Successfully connected to server');
           
-          // Send /team chat immediately upon spawn
-          console.log(chalk.magenta(`🛡️ [${this.email}] Sending team chat command immediately...`));
-          try {
-            if (this.bot && this.bot._client && this.bot.chat && this.isConnected) {
-              this.bot.chat('/team chat');
-              await Database.logEvent(this.email, 'INFO', 'Team chat command sent: /team chat');
-              console.log(chalk.green(`✅ [${this.email}] Team chat command sent`));
-            } else {
-              console.log(chalk.yellow(`⚠️ [${this.email}] Bot client not ready for chat commands`));
-              await Database.logEvent(this.email, 'WARNING', 'Bot client not ready for team chat command');
+          // Add random delay before sending team chat to appear more human-like
+          const teamChatDelay = Math.random() * 3000 + 2000; // Random delay between 2-5 seconds
+          console.log(chalk.magenta(`🛡️ [${this.email}] Waiting ${(teamChatDelay/1000).toFixed(1)}s before team chat...`));
+          
+          setTimeout(async () => {
+            try {
+              if (this.bot && this.bot._client && this.bot.chat && this.isConnected) {
+                this.bot.chat('/team chat');
+                await Database.logEvent(this.email, 'INFO', 'Team chat command sent: /team chat');
+                console.log(chalk.green(`✅ [${this.email}] Team chat command sent`));
+              } else {
+                console.log(chalk.yellow(`⚠️ [${this.email}] Bot client not ready for chat commands`));
+                await Database.logEvent(this.email, 'WARNING', 'Bot client not ready for team chat command');
+              }
+            } catch (err) {
+              console.log(chalk.yellow(`⚠️ [${this.email}] Failed to send team chat: ${err.message}`));
+              await Database.logEvent(this.email, 'WARNING', `Failed to send team chat: ${err.message}`);
             }
-          } catch (err) {
-            console.log(chalk.yellow(`⚠️ [${this.email}] Failed to send team chat: ${err.message}`));
-            await Database.logEvent(this.email, 'WARNING', `Failed to send team chat: ${err.message}`);
-          }
+          }, teamChatDelay);
           
           // Initialize addon features after successful spawn
           this.addon = new AddonFeatures(this.bot, this.email);
@@ -167,8 +181,10 @@ export class MinecraftBot {
     }
 
     try {
-      console.log(chalk.magenta(`⏱️ [${this.email}] Waiting 2 seconds before AFK command...`));
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Random delay between 5-10 seconds to avoid detection patterns
+      const afkDelay = Math.random() * 5000 + 5000;
+      console.log(chalk.magenta(`⏱️ [${this.email}] Waiting ${(afkDelay/1000).toFixed(1)} seconds before AFK command...`));
+      await new Promise(resolve => setTimeout(resolve, afkDelay));
       
       console.log(chalk.magenta(`💤 [${this.email}] Starting AFK sequence...`));
       console.log(chalk.magenta(`📤 [${this.email}] Sending AFK command: /afk 33`));
@@ -186,22 +202,33 @@ export class MinecraftBot {
         await Database.logEvent(this.email, 'WARNING', `Failed to send AFK command: ${err.message}`);
       }
       
-      console.log(chalk.magenta(`🦘 [${this.email}] Setting up anti-kick jump mechanism (every 60 seconds)`));
+      console.log(chalk.magenta(`🦘 [${this.email}] Setting up anti-kick jump mechanism (randomized timing)`));
       
-      this.jumpInterval = setInterval(() => {
-        if (this.bot && this.bot.entity && this.isConnected) {
-          console.log(chalk.cyan(`🦘 [${this.email}] Performing anti-kick jump`));
-          this.bot.setControlState('jump', true);
-          setTimeout(() => {
-            if (this.bot) {
-              this.bot.setControlState('jump', false);
-              console.log(chalk.green(`✅ [${this.email}] Jump completed`));
-            }
-          }, 100);
-        } else {
-          console.log(chalk.yellow(`⚠️ [${this.email}] Bot entity not found, skipping jump`));
-        }
-      }, 60000); // Jump every 60 seconds
+      const scheduleNextJump = () => {
+        // Random interval between 45-75 seconds to avoid patterns
+        const jumpDelay = Math.random() * 30000 + 45000;
+        this.jumpInterval = setTimeout(() => {
+          if (this.bot && this.bot.entity && this.isConnected) {
+            console.log(chalk.cyan(`🦘 [${this.email}] Performing anti-kick jump`));
+            this.bot.setControlState('jump', true);
+            setTimeout(() => {
+              if (this.bot) {
+                this.bot.setControlState('jump', false);
+                console.log(chalk.green(`✅ [${this.email}] Jump completed`));
+              }
+            }, 100);
+            // Schedule next jump
+            scheduleNextJump();
+          } else {
+            console.log(chalk.yellow(`⚠️ [${this.email}] Bot entity not found, skipping jump`));
+            // Retry in 5 seconds if bot not ready
+            setTimeout(scheduleNextJump, 5000);
+          }
+        }, jumpDelay);
+      };
+      
+      // Start the randomized jump cycle
+      scheduleNextJump();
       
       console.log(chalk.green(`🎯 [${this.email}] AFK sequence setup completed successfully`));
       await Database.logEvent(this.email, 'SUCCESS', 'AFK sequence started successfully');
@@ -250,7 +277,7 @@ export class MinecraftBot {
     this.autoReconnect = false; // Disable auto-reconnect when manually disconnecting
     
     if (this.jumpInterval) {
-      clearInterval(this.jumpInterval);
+      clearTimeout(this.jumpInterval);
       this.jumpInterval = null;
     }
     
