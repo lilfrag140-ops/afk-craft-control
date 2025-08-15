@@ -14,7 +14,117 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      accounts: {
+        Row: {
+          connection_status: string | null
+          created_at: string
+          email: string
+          id: string
+          is_connected: boolean
+          is_selected: boolean
+          last_connected_at: string | null
+          password: string
+          updated_at: string
+        }
+        Insert: {
+          connection_status?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          is_connected?: boolean
+          is_selected?: boolean
+          last_connected_at?: string | null
+          password: string
+          updated_at?: string
+        }
+        Update: {
+          connection_status?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          is_connected?: boolean
+          is_selected?: boolean
+          last_connected_at?: string | null
+          password?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      bot_logs: {
+        Row: {
+          account_email: string
+          id: string
+          log_level: string
+          message: string
+          timestamp: string
+        }
+        Insert: {
+          account_email: string
+          id?: string
+          log_level: string
+          message: string
+          timestamp?: string
+        }
+        Update: {
+          account_email?: string
+          id?: string
+          log_level?: string
+          message?: string
+          timestamp?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          created_at: string
+          id: string
+          interval_seconds: number
+          is_enabled: boolean
+          message: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interval_seconds?: number
+          is_enabled?: boolean
+          message: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interval_seconds?: number
+          is_enabled?: boolean
+          message?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      server_configs: {
+        Row: {
+          created_at: string
+          id: string
+          server_ip: string
+          server_port: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          server_ip?: string
+          server_port?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          server_ip?: string
+          server_port?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

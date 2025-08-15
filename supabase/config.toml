@@ -1,1 +1,7 @@
 project_id = "nkjosjigixkhkgadizqr"
+
+[functions.connect-bot]
+verify_jwt = false
+
+[functions.disconnect-bot]
+verify_jwt = false
