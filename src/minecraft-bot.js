@@ -11,6 +11,10 @@ export class MinecraftBot {
     this.bot = null;
     this.jumpInterval = null;
     this.isConnected = false;
+    this.autoReconnect = true;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 10;
+    this.reconnectDelay = 5000; // 5 seconds
   }
 
   async connect() {
@@ -72,6 +76,11 @@ export class MinecraftBot {
           await Database.updateAccountStatus(this.email, 'disconnected', false);
           await Database.logEvent(this.email, 'ERROR', `Kicked: ${JSON.stringify(reason)}`);
           
+          if (this.autoReconnect) {
+            console.log(chalk.yellow(`🔄 [${this.email}] Auto-reconnect triggered...`));
+            await this.attemptReconnect();
+          }
+          
           reject(new Error(`Kicked: ${JSON.stringify(reason)}`));
         });
 
@@ -84,6 +93,11 @@ export class MinecraftBot {
           await Database.updateAccountStatus(this.email, 'failed', false);
           await Database.logEvent(this.email, 'ERROR', `Connection failed: ${err.message}`);
           
+          if (this.autoReconnect) {
+            console.log(chalk.yellow(`🔄 [${this.email}] Auto-reconnect triggered...`));
+            await this.attemptReconnect();
+          }
+          
           reject(err);
         });
 
@@ -94,6 +108,11 @@ export class MinecraftBot {
           
           await Database.updateAccountStatus(this.email, 'disconnected', false);
           await Database.logEvent(this.email, 'INFO', `Bot disconnected: ${reason || 'Unknown'}`);
+          
+          if (this.autoReconnect && reason !== 'disconnect') {
+            console.log(chalk.yellow(`🔄 [${this.email}] Auto-reconnect triggered...`));
+            await this.attemptReconnect();
+          }
         });
 
         // Chat event listener - only log important messages
@@ -161,8 +180,41 @@ export class MinecraftBot {
     }
   }
 
+  async attemptReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log(chalk.red(`❌ [${this.email}] Max reconnect attempts reached (${this.maxReconnectAttempts}). Giving up.`));
+      await Database.logEvent(this.email, 'ERROR', `Max reconnect attempts reached (${this.maxReconnectAttempts})`);
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = this.reconnectDelay * this.reconnectAttempts; // Exponential backoff
+    
+    console.log(chalk.cyan(`⏰ [${this.email}] Waiting ${delay/1000} seconds before reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`));
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    try {
+      console.log(chalk.blue(`🔄 [${this.email}] Attempting to reconnect...`));
+      await this.connect();
+      await this.startAFKSequence();
+      
+      this.reconnectAttempts = 0; // Reset counter on successful reconnect
+      console.log(chalk.green(`✅ [${this.email}] Successfully reconnected and resumed AFK!`));
+      await Database.logEvent(this.email, 'SUCCESS', 'Successfully reconnected and resumed AFK');
+      
+    } catch (error) {
+      console.log(chalk.red(`❌ [${this.email}] Reconnect attempt ${this.reconnectAttempts} failed: ${error.message}`));
+      await Database.logEvent(this.email, 'ERROR', `Reconnect attempt ${this.reconnectAttempts} failed: ${error.message}`);
+      
+      // Try again after delay
+      setTimeout(() => this.attemptReconnect(), 2000);
+    }
+  }
+
   disconnect() {
     console.log(chalk.yellow(`🔌 [${this.email}] Disconnecting bot...`));
+    
+    this.autoReconnect = false; // Disable auto-reconnect when manually disconnecting
     
     if (this.jumpInterval) {
       clearInterval(this.jumpInterval);
