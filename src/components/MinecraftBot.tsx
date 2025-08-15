@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { DashboardLayout } from './Dashboard/DashboardLayout';
+import { AppSidebar } from './Dashboard/AppSidebar';
+import { DashboardContent } from './Dashboard/DashboardContent';
 import { AccountManager } from './AccountManager';
 import { ServerControl } from './ServerControl';
 import { CommandPanel } from './CommandPanel';
 import { StatusPanel } from './StatusPanel';
 import LogsConsole, { LogEntry } from './LogsConsole';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -47,6 +49,7 @@ const MinecraftBot: React.FC = () => {
   });
   const [isLoopActive, setIsLoopActive] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [activeSection, setActiveSection] = useState('accounts');
 
   // Logging utility
   const addLog = (level: LogEntry['level'], message: string, data?: any) => {
@@ -623,81 +626,40 @@ const MinecraftBot: React.FC = () => {
   };
 
   return (
-    <ScrollArea className="h-screen w-full">
-      <div className="min-h-screen bg-background p-4 lg:p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="text-center space-y-2">
-            <h1 className="text-4xl lg:text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              McAFK Bot
-            </h1>
-            <p className="text-muted-foreground text-lg">
-              Modern Minecraft Multi-Account Manager & AFK Bot
-            </p>
-          </div>
-
-          {/* Main Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {/* Account Management */}
-            <div className="lg:col-span-1">
-              <AccountManager
-                accounts={accounts}
-                onAddAccount={addAccount}
-                onRemoveAccount={removeAccount}
-                onToggleSelection={toggleAccountSelection}
-                onSelectAll={selectAllAccounts}
-                onDeselectAll={deselectAllAccounts}
-                onSelectRange={selectAccountRange}
-              />
-            </div>
-
-            {/* Server Control */}
-            <div className="lg:col-span-1">
-              <ServerControl
-                serverConfig={serverConfig}
-                onServerConfigChange={setServerConfig}
-                onConnect={connectSelectedAccounts}
-                onDisconnect={disconnectSelectedAccounts}
-                selectedAccountsCount={accounts.filter(a => a.isSelected).length}
-                connectedAccountsCount={accounts.filter(a => a.isOnline).length}
-              />
-            </div>
-
-            {/* Enhanced Chat Panel */}
-            <div className="lg:col-span-2 xl:col-span-1">
-              <CommandPanel
-                accounts={accounts}
-                chatMessages={chatMessages}
-                onAddChatMessage={addChatMessage}
-                onUpdateChatMessage={updateChatMessage}
-                onRemoveChatMessage={removeChatMessage}
-                onAssignSelectedAccounts={assignSelectedAccountsToMessage}
-                onSendSingleMessage={sendSingleMessage}
-                onStartLoop={startMessageLoop}
-                onStopLoop={stopMessageLoop}
-                loopSettings={loopSettings}
-                onLoopSettingsChange={setLoopSettings}
-                isLoopActive={isLoopActive}
-              />
-            </div>
-
-            {/* Status Panel */}
-            <div className="lg:col-span-2 xl:col-span-3">
-              <StatusPanel accounts={accounts} />
-            </div>
-
-            {/* Raw Logs Console */}
-            <div className="lg:col-span-2 xl:col-span-3">
-              <LogsConsole
-                logs={logs}
-                onClearLogs={clearLogs}
-                onExportLogs={exportLogs}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    </ScrollArea>
+    <DashboardLayout accounts={accounts} serverConfig={serverConfig}>
+      <AppSidebar
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+      />
+      <DashboardContent
+        activeSection={activeSection}
+        accounts={accounts}
+        chatMessages={chatMessages}
+        serverConfig={serverConfig}
+        loopSettings={loopSettings}
+        isLoopActive={isLoopActive}
+        logs={logs}
+        onAddAccount={addAccount}
+        onRemoveAccount={removeAccount}
+        onToggleAccountSelection={toggleAccountSelection}
+        onSelectAllAccounts={selectAllAccounts}
+        onDeselectAllAccounts={deselectAllAccounts}
+        onSelectAccountRange={selectAccountRange}
+        onConnectSelectedAccounts={connectSelectedAccounts}
+        onDisconnectSelectedAccounts={disconnectSelectedAccounts}
+        onUpdateServerConfig={setServerConfig}
+        onAddChatMessage={addChatMessage}
+        onUpdateChatMessage={updateChatMessage}
+        onRemoveChatMessage={removeChatMessage}
+        onAssignSelectedAccountsToMessage={assignSelectedAccountsToMessage}
+        onSendSingleMessage={sendSingleMessage}
+        onUpdateLoopSettings={setLoopSettings}
+        onStartMessageLoop={startMessageLoop}
+        onStopMessageLoop={stopMessageLoop}
+        onClearLogs={clearLogs}
+        onExportLogs={exportLogs}
+      />
+    </DashboardLayout>
   );
 };
 
