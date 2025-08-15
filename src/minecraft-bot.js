@@ -36,17 +36,7 @@ export class MinecraftBot {
         hideErrors: true, // Hide packet errors that interfere with CLI
         checkTimeoutInterval: 30 * 1000,
         keepAlive: true,
-        logErrors: false, // Disable error logging to console
-        // Add connection options to reduce detection
-        clientToken: require('crypto').randomUUID(),
-        session: {
-          accessToken: '',
-          clientToken: require('crypto').randomUUID(),
-          selectedProfile: {
-            id: require('crypto').randomUUID(),
-            name: this.email
-          }
-        }
+        logErrors: false // Disable error logging to console
       });
 
       return new Promise((resolve, reject) => {
