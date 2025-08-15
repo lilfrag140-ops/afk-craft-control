@@ -65,6 +65,26 @@ export class MinecraftBot {
           if (this.silentMode) {
             console.log(chalk.yellow(`🔇 [${this.email}] Silent mode active - no commands will be sent`));
             await Database.logEvent(this.email, 'INFO', 'Connected in silent mode - no commands sent');
+          } else if (this.teamChatOnly) {
+            console.log(chalk.yellow(`💬 [${this.email}] Team chat only mode - only /team chat will be sent`));
+            await Database.logEvent(this.email, 'INFO', 'Connected in team chat only mode');
+            
+            // Wait 3 seconds then send only team chat command
+            setTimeout(async () => {
+              try {
+                if (this.bot && this.bot._client && this.bot.chat && this.isConnected) {
+                  this.bot.chat('/team chat');
+                  await Database.logEvent(this.email, 'INFO', 'Team chat command sent: /team chat');
+                  console.log(chalk.green(`✅ [${this.email}] Team chat command sent, staying idle now`));
+                } else {
+                  console.log(chalk.yellow(`⚠️ [${this.email}] Bot client not ready for team chat command`));
+                  await Database.logEvent(this.email, 'WARNING', 'Bot client not ready for team chat command');
+                }
+              } catch (err) {
+                console.log(chalk.yellow(`⚠️ [${this.email}] Failed to send team chat command: ${err.message}`));
+                await Database.logEvent(this.email, 'WARNING', `Failed to send team chat command: ${err.message}`);
+              }
+            }, 3000);
           } else {
             // Wait longer after spawn to appear more human-like (10-20 seconds)
             const initialDelay = Math.random() * 10000 + 10000; // Random delay between 10-20 seconds

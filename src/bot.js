@@ -28,6 +28,7 @@ class BotManager {
     const choices = [
       { name: '🔗 Connect Bot(s)', value: 'connect' },
       { name: '🔇 Silent Connect (Test Mode)', value: 'silent_connect' },
+      { name: '💬 Team Chat Only (Test Mode)', value: 'teamchat_only' },
       { name: '🔌 Disconnect All Bots', value: 'disconnect', disabled: connectedBots.length === 0 },
       { name: '🤖 Individual Bot Control', value: 'individual', disabled: connectedBots.length === 0 },
       { name: '🔍 Explore Addon', value: 'addon', disabled: connectedBots.length === 0 },
@@ -57,6 +58,9 @@ class BotManager {
         break;
       case 'silent_connect':
         await this.silentConnectBots();
+        break;
+      case 'teamchat_only':
+        await this.teamChatOnlyBots();
         break;
       case 'disconnect':
         await this.disconnectAllBots();
@@ -209,6 +213,69 @@ class BotManager {
 
     console.log(chalk.green(`\n🎉 Silent connection process completed!`));
     console.log(chalk.yellow('📊 Bots are connected but idle - no chat messages or commands sent'));
+    await this.waitForKeypress();
+  }
+
+  async teamChatOnlyBots() {
+    const accounts = await Database.getAccounts();
+    
+    if (accounts.length === 0) {
+      console.log(chalk.yellow('⚠️ No accounts found. Please add an account first.'));
+      await this.waitForKeypress();
+      return;
+    }
+
+    const serverConfig = await Database.getServerConfig();
+    
+    console.log(chalk.blue(`🌐 Server: ${serverConfig.server_ip}:${serverConfig.server_port}`));
+    console.log(chalk.yellow('💬 Team Chat Only Mode - Only /team chat will be sent after 3 seconds'));
+    
+    const choices = accounts.map(account => ({
+      name: `${account.email} ${account.is_connected ? chalk.green('(Connected)') : chalk.red('(Disconnected)')}`,
+      value: account.email,
+      disabled: this.bots.has(account.email) && this.bots.get(account.email).isConnected
+    }));
+
+    const { selectedAccounts } = await inquirer.prompt([
+      {
+        type: 'checkbox',
+        name: 'selectedAccounts',
+        message: 'Select accounts for team chat only mode:',
+        choices,
+        validate: (input) => input.length > 0 || 'Please select at least one account'
+      }
+    ]);
+
+    console.log(chalk.blue(`🚀 Connecting ${selectedAccounts.length} account(s) in team chat only mode...`));
+
+    for (const email of selectedAccounts) {
+      try {
+        const account = accounts.find(acc => acc.email === email);
+        console.log(chalk.blue(`\n🔄 Connecting ${email}...`));
+        
+        const bot = new MinecraftBot(
+          account.email,
+          account.password,
+          serverConfig.server_ip,
+          serverConfig.server_port
+        );
+
+        // Set team chat only mode flag before connecting
+        bot.teamChatOnly = true;
+        
+        await bot.connect();
+        // Note: NOT calling startAFKSequence() for team chat only mode
+        
+        this.bots.set(email, bot);
+        console.log(chalk.green(`✅ ${email} connected in team chat only mode!`));
+        
+      } catch (error) {
+        console.error(chalk.red(`❌ Failed to connect ${email}: ${error.message}`));
+      }
+    }
+
+    console.log(chalk.green(`\n🎉 Team chat only connection process completed!`));
+    console.log(chalk.yellow('📊 Bots will send /team chat after 3 seconds and then stay idle'));
     await this.waitForKeypress();
   }
 
