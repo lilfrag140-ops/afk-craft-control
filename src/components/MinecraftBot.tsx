@@ -61,6 +61,48 @@ const MinecraftBot: React.FC = () => {
     console.log(`[${level.toUpperCase()}] ${message}`, data || '');
   };
 
+  // Check connection status for an account
+  const checkConnectionStatus = async (email: string) => {
+    try {
+      const { data: account, error } = await supabase
+        .from('accounts')
+        .select('connection_status')
+        .eq('email', email)
+        .single();
+
+      if (error) {
+        console.error(`❌ Failed to check status for ${email}:`, error);
+        addLog('error', `Failed to check connection status for ${email}`);
+        return;
+      }
+
+      if (account) {
+        const status = account.connection_status;
+        console.log(`📊 Connection status for ${email}: ${status}`);
+        
+        if (status === 'failed') {
+          addLog('error', `Connection failed for ${email} - check backend logs for details`);
+          // Update local state
+          setAccounts(prev => prev.map(acc => 
+            acc.email === email 
+              ? { ...acc, isOnline: false, lastActivity: 'Connection failed' }
+              : acc
+          ));
+        } else if (status === 'connected') {
+          addLog('success', `Successfully connected ${email}`);
+          // Update local state
+          setAccounts(prev => prev.map(acc => 
+            acc.email === email 
+              ? { ...acc, isOnline: true, lastActivity: 'Connected' }
+              : acc
+          ));
+        }
+      }
+    } catch (error) {
+      console.error(`💥 Error checking status for ${email}:`, error);
+    }
+  };
+
   // Load accounts from Supabase database
   const loadAccountsFromDatabase = async () => {
     try {
@@ -320,6 +362,11 @@ const MinecraftBot: React.FC = () => {
                 : acc
             )
           );
+          
+          // Check connection status after a brief delay
+          setTimeout(async () => {
+            await checkConnectionStatus(account.email);
+          }, 3000);
         }
       } catch (error) {
         console.error(`💥 Unexpected error connecting ${account.email}:`, error);
