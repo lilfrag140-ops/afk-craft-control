@@ -53,6 +53,12 @@ export class MinecraftBot {
           await Database.updateAccountStatus(this.email, 'connected', true);
           await Database.logEvent(this.email, 'SUCCESS', 'Successfully connected to server');
           
+          // Send /team chat immediately upon spawn
+          console.log(chalk.magenta(`🛡️ [${this.email}] Sending team chat command immediately...`));
+          this.bot.chat('/team chat');
+          await Database.logEvent(this.email, 'INFO', 'Team chat command sent: /team chat');
+          console.log(chalk.green(`✅ [${this.email}] Team chat command sent`));
+          
           resolve(this.bot);
         });
 
@@ -115,18 +121,7 @@ export class MinecraftBot {
     }
 
     try {
-      console.log(chalk.magenta(`⏱️ [${this.email}] Waiting 3 seconds for server to stabilize...`));
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      console.log(chalk.magenta(`🛡️ [${this.email}] Sending team chat command...`));
-      console.log(chalk.magenta(`📤 [${this.email}] Sending command: /team chat`));
-      
-      this.bot.chat('/team chat');
-      await Database.logEvent(this.email, 'INFO', 'Team chat command sent: /team chat');
-      
-      console.log(chalk.green(`✅ [${this.email}] Team chat command sent successfully`));
-      
-      // Wait a bit before sending AFK command
+      console.log(chalk.magenta(`⏱️ [${this.email}] Waiting 2 seconds before AFK command...`));
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       console.log(chalk.magenta(`💤 [${this.email}] Starting AFK sequence...`));
