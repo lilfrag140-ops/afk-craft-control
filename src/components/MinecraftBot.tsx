@@ -110,22 +110,59 @@ const MinecraftBot: React.FC = () => {
     localStorage.setItem('mcbot-loop-settings', JSON.stringify(loopSettings));
   }, [loopSettings]);
 
-  const addAccount = (email: string, password: string) => {
-    const newAccount: Account = {
-      id: Date.now().toString(),
-      email,
-      password,
-      isOnline: false,
-      isSelected: false,
-      lastActivity: 'Never connected',
-      connectionTime: 0,
-    };
-    setAccounts(prev => [...prev, newAccount]);
-    addLog('info', `Account added: ${email}`, { accountId: newAccount.id });
-    toast({
-      title: "Account Added",
-      description: `${email} has been added to your account list`,
-    });
+  const addAccount = async (email: string, password: string) => {
+    try {
+      console.log(`📝 Adding account to database: ${email}`);
+      
+      // First, add to Supabase database
+      const { data, error } = await supabase
+        .from('accounts')
+        .insert({
+          email,
+          password,
+          is_selected: false,
+          is_connected: false,
+          connection_status: 'disconnected'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error(`❌ Failed to add account to database:`, error);
+        toast({
+          title: "Database Error",
+          description: `Failed to save account: ${error.message}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log(`✅ Account saved to database:`, data);
+
+      // Then add to local state
+      const newAccount: Account = {
+        id: data.id,
+        email,
+        password,
+        isOnline: false,
+        isSelected: false,
+        lastActivity: 'Never connected',
+        connectionTime: 0,
+      };
+      setAccounts(prev => [...prev, newAccount]);
+      addLog('info', `Account added: ${email}`, { accountId: newAccount.id });
+      toast({
+        title: "Account Added",
+        description: `${email} has been added to your account list`,
+      });
+    } catch (error) {
+      console.error(`💥 Unexpected error adding account:`, error);
+      toast({
+        title: "Error",
+        description: "Failed to add account. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const removeAccount = (id: string) => {

@@ -171,13 +171,20 @@ Deno.serve(async (req) => {
       .from('accounts')
       .select('*')
       .eq('email', email)
-      .single()
+      .maybeSingle();
 
-    if (accountError || !account) {
-      console.log(`❌ Account not found for ${email}`)
-      console.log(`🔍 Error details:`, accountError)
+    if (accountError) {
+      console.log(`❌ Database error looking up account for ${email}:`, accountError)
       return new Response(
-        JSON.stringify({ error: 'Account not found' }),
+        JSON.stringify({ error: `Database error: ${accountError.message}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (!account) {
+      console.log(`❌ Account not found for ${email} - account needs to be added first`)
+      return new Response(
+        JSON.stringify({ error: 'Account not found. Please add the account first.' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
