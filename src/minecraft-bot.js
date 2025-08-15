@@ -27,9 +27,10 @@ export class MinecraftBot {
         password: this.password,
         auth: 'microsoft',
         version: false, // Let mineflayer auto-detect server version
-        hideErrors: false,
+        hideErrors: true, // Hide packet errors that interfere with CLI
         checkTimeoutInterval: 30 * 1000,
-        keepAlive: true
+        keepAlive: true,
+        logErrors: false // Disable error logging to console
       });
 
       return new Promise((resolve, reject) => {
@@ -95,16 +96,17 @@ export class MinecraftBot {
           await Database.logEvent(this.email, 'INFO', `Bot disconnected: ${reason || 'Unknown'}`);
         });
 
-        // Chat event listener
+        // Chat event listener - only log important messages
         this.bot.on('chat', (username, message) => {
-          if (username !== this.bot.username) {
-            console.log(chalk.gray(`💬 [${this.email}] <${username}> ${message}`));
+          if (username !== this.bot.username && !message.includes('has joined') && !message.includes('has left')) {
+            // Only log to database, not console to avoid CLI interference
+            Database.logEvent(this.email, 'INFO', `Chat: <${username}> ${message}`);
           }
         });
 
-        // Health monitoring
+        // Health monitoring - log to database only
         this.bot.on('health', () => {
-          console.log(chalk.cyan(`❤️ [${this.email}] Health: ${this.bot.health}/${this.bot.food}`));
+          Database.logEvent(this.email, 'INFO', `Health: ${this.bot.health}/${this.bot.food}`);
         });
       });
     } catch (error) {

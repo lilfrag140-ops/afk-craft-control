@@ -10,9 +10,11 @@ class BotManager {
     this.bots = new Map();
     this.isRunning = false;
     this.messageLoops = new Map();
+    this.suppressLogs = false;
   }
 
   async showMainMenu() {
+    this.suppressLogs = true; // Suppress logs during menu interaction
     console.clear();
     console.log(chalk.bold.blue('🎮 Minecraft AFK Bot Manager'));
     console.log(chalk.gray('━'.repeat(50)));
@@ -44,6 +46,8 @@ class BotManager {
         choices
       }
     ]);
+
+    this.suppressLogs = false; // Re-enable logs after menu selection
 
     switch (action) {
       case 'connect':
