@@ -1679,6 +1679,7 @@ class BotManager {
   async accountChecker() {
     try {
       const fs = await import('fs');
+      const { AuthChecker } = await import('./auth-checker.js');
       
       const filePath = 'accounts.txt';
       
@@ -1702,11 +1703,21 @@ class BotManager {
 
       console.log(chalk.blue(`📁 Found ${lines.length} accounts to check`));
       
-      const { confirm } = await inquirer.prompt([
+      const { method, confirm } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'method',
+          message: 'Choose validation method:',
+          choices: [
+            { name: '🔐 Auth Only (Fast - Microsoft authentication)', value: 'auth' },
+            { name: '🎮 Server Test (Slow - connects to server)', value: 'server' }
+          ],
+          default: 'auth'
+        },
         {
           type: 'confirm',
           name: 'confirm',
-          message: `Check ${lines.length} accounts from accounts.txt?`,
+          message: `Check ${lines.length} accounts?`,
           default: true
         }
       ]);
@@ -1717,10 +1728,8 @@ class BotManager {
         return;
       }
 
-      console.log(chalk.blue('🔄 Testing accounts... This may take a while.'));
-      
-      const workingAccounts = [];
-      const failedAccounts = [];
+      // Parse accounts
+      const accounts = [];
       const invalidFormat = [];
 
       for (let i = 0; i < lines.length; i++) {
@@ -1746,62 +1755,23 @@ class BotManager {
           continue;
         }
 
-        console.log(chalk.cyan(`🔍 Testing ${i + 1}/${lines.length}: ${email.trim()}`));
-        
-        try {
-          // Create a test bot to check login
-          const testBot = new MinecraftBot(
-            email.trim(),
-            password.trim(),
-            'mc.hypixel.net', // Using a reliable test server
-            25565
-          );
-
-          // Set silent mode to prevent any commands
-          testBot.silentMode = true;
-          
-          // Try to connect with a shorter timeout
-          await Promise.race([
-            testBot.connect(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout')), 15000)
-            )
-          ]);
-          
-          // If we get here, login was successful
-          console.log(chalk.green(`✅ ${email.trim()} - Working`));
-          workingAccounts.push(`${email.trim()}:${password.trim()}`);
-          
-          // Disconnect immediately
-          testBot.disconnect();
-          
-        } catch (error) {
-          console.log(chalk.red(`❌ ${email.trim()} - Failed: ${error.message}`));
-          failedAccounts.push(`${email.trim()}:${password.trim()}`);
-        }
-        
-        // Small delay between tests to avoid rate limiting
-        if (i < lines.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+        accounts.push({ email: email.trim(), password: password.trim() });
       }
 
-      // Show results
-      console.log('');
-      console.log(chalk.blue('📊 Account Check Results:'));
-      console.log(`✅ Working accounts: ${chalk.green(workingAccounts.length)}`);
-      console.log(`❌ Failed accounts: ${chalk.red(failedAccounts.length)}`);
-      console.log(`⚠️ Invalid format: ${chalk.yellow(invalidFormat.length)}`);
-      
-      // Save results to files
-      if (workingAccounts.length > 0) {
-        fs.writeFileSync('working_accounts.txt', workingAccounts.join('\n'));
-        console.log(chalk.green('💾 Working accounts saved to working_accounts.txt'));
+      if (accounts.length === 0) {
+        console.log(chalk.yellow('⚠️ No valid accounts found to check!'));
+        await this.waitForKeypress();
+        return;
       }
-      
-      if (failedAccounts.length > 0) {
-        fs.writeFileSync('failed_accounts.txt', failedAccounts.join('\n'));
-        console.log(chalk.red('💾 Failed accounts saved to failed_accounts.txt'));
+
+      if (method === 'auth') {
+        // Use fast Microsoft authentication
+        const authChecker = new AuthChecker();
+        const results = await authChecker.checkAccountList(accounts);
+        await authChecker.saveResults();
+      } else {
+        // Use the old server connection method
+        await this.serverTestMethod(accounts);
       }
 
     } catch (error) {
@@ -1809,6 +1779,74 @@ class BotManager {
     }
 
     await this.waitForKeypress();
+  }
+
+  async serverTestMethod(accounts) {
+    console.log(chalk.blue('🔄 Testing accounts via server connection... This may take a while.'));
+    
+    const workingAccounts = [];
+    const failedAccounts = [];
+
+    for (let i = 0; i < accounts.length; i++) {
+      const { email, password } = accounts[i];
+      
+      console.log(chalk.cyan(`🔍 Testing ${i + 1}/${accounts.length}: ${email}`));
+      
+      try {
+        // Create a test bot to check login
+        const testBot = new MinecraftBot(
+          email,
+          password,
+          'mc.hypixel.net', // Using a reliable test server
+          25565
+        );
+
+        // Set silent mode to prevent any commands
+        testBot.silentMode = true;
+        
+        // Try to connect with a shorter timeout
+        await Promise.race([
+          testBot.connect(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 15000)
+          )
+        ]);
+        
+        // If we get here, login was successful
+        console.log(chalk.green(`✅ ${email} - Working`));
+        workingAccounts.push(`${email}:${password}`);
+        
+        // Disconnect immediately
+        testBot.disconnect();
+        
+      } catch (error) {
+        console.log(chalk.red(`❌ ${email} - Failed: ${error.message}`));
+        failedAccounts.push(`${email}:${password}`);
+      }
+      
+      // Small delay between tests to avoid rate limiting
+      if (i < accounts.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+
+    // Show results
+    console.log('');
+    console.log(chalk.blue('📊 Account Check Results:'));
+    console.log(`✅ Working accounts: ${chalk.green(workingAccounts.length)}`);
+    console.log(`❌ Failed accounts: ${chalk.red(failedAccounts.length)}`);
+    
+    // Save results to files
+    const fs = await import('fs');
+    if (workingAccounts.length > 0) {
+      fs.writeFileSync('working_accounts.txt', workingAccounts.join('\n'));
+      console.log(chalk.green('💾 Working accounts saved to working_accounts.txt'));
+    }
+    
+    if (failedAccounts.length > 0) {
+      fs.writeFileSync('failed_accounts.txt', failedAccounts.join('\n'));
+      console.log(chalk.red('💾 Failed accounts saved to failed_accounts.txt'));
+    }
   }
 }
 
