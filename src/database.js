@@ -75,14 +75,14 @@ export class Database {
       .from('server_configs')
       .select('*')
       .limit(1)
-      .single();
+      .maybeSingle();
     
-    if (error && error.code !== 'PGRST116') {
-      console.warn('No server config found, using defaults');
+    if (error) {
+      console.warn('Error fetching server config:', error.message);
     }
     
     return data || {
-      server_ip: process.env.DEFAULT_SERVER_IP || 'localhost',
+      server_ip: process.env.DEFAULT_SERVER_IP || 'donutsmp.net',
       server_port: parseInt(process.env.DEFAULT_SERVER_PORT) || 25565
     };
   }
@@ -93,7 +93,7 @@ export class Database {
       .from('server_configs')
       .select('*')
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       // Update existing config
