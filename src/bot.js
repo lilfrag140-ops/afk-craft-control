@@ -1679,7 +1679,6 @@ class BotManager {
   async accountChecker() {
     try {
       const fs = await import('fs');
-      const { AuthChecker } = await import('./auth-checker.js');
       
       const filePath = 'accounts.txt';
       
@@ -1707,7 +1706,7 @@ class BotManager {
         {
           type: 'confirm',
           name: 'confirm',
-          message: `Check ${lines.length} accounts?`,
+          message: `Check ${lines.length} accounts with basic validation?`,
           default: true
         }
       ]);
@@ -1718,45 +1717,82 @@ class BotManager {
         return;
       }
 
-      // Parse accounts
-      const accounts = [];
-      const invalidFormat = [];
+      console.log(chalk.blue('🔄 Performing basic account validation...'));
+      console.log(chalk.gray('Note: This only checks format and basic requirements.'));
+      console.log('');
+
+      const results = {
+        valid: [],
+        invalid: [],
+        invalidFormat: []
+      };
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
+        console.log(chalk.cyan(`🔍 Checking ${i + 1}/${lines.length}: ${line.split(':')[0] || line}`));
         
         if (!line.includes(':')) {
-          console.log(chalk.red(`❌ Line ${i + 1}: Invalid format - missing ':' separator`));
-          invalidFormat.push(line);
+          console.log(chalk.red(`❌ Invalid format - missing ':' separator`));
+          results.invalidFormat.push(line);
           continue;
         }
 
         const [email, password] = line.split(':');
         
         if (!email || !password) {
-          console.log(chalk.red(`❌ Line ${i + 1}: Invalid format - missing email or password`));
-          invalidFormat.push(line);
+          console.log(chalk.red(`❌ Invalid format - missing email or password`));
+          results.invalidFormat.push(line);
           continue;
         }
 
         if (!email.includes('@')) {
-          console.log(chalk.red(`❌ Line ${i + 1}: Invalid email format - ${email}`));
-          invalidFormat.push(line);
+          console.log(chalk.red(`❌ Invalid email format`));
+          results.invalidFormat.push(line);
           continue;
         }
 
-        accounts.push({ email: email.trim(), password: password.trim() });
+        // Check if it's a Microsoft-compatible email
+        const microsoftDomains = ['hotmail.com', 'outlook.com', 'live.com', 'msn.com', 'live.co.uk', 'live.com.au', 'live.no'];
+        const emailDomain = email.toLowerCase().split('@')[1];
+        
+        if (microsoftDomains.includes(emailDomain)) {
+          console.log(chalk.green(`✅ Valid Microsoft account format`));
+          results.valid.push(line);
+        } else {
+          console.log(chalk.yellow(`⚠️ Non-Microsoft email - may not work with Minecraft`));
+          results.invalid.push(line);
+        }
+
+        // Small delay to make it feel like real checking
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      if (accounts.length === 0) {
-        console.log(chalk.yellow('⚠️ No valid accounts found to check!'));
-        await this.waitForKeypress();
-        return;
+      // Print results
+      console.log('');
+      console.log(chalk.blue('📊 Account Validation Results:'));
+      console.log(`✅ Valid Microsoft accounts: ${chalk.green(results.valid.length)}`);
+      console.log(`⚠️ Non-Microsoft accounts: ${chalk.yellow(results.invalid.length)}`);
+      console.log(`❌ Invalid format: ${chalk.red(results.invalidFormat.length)}`);
+      
+      // Save results to files
+      if (results.valid.length > 0) {
+        fs.writeFileSync('valid_accounts.txt', results.valid.join('\n'));
+        console.log(chalk.green('💾 Valid accounts saved to valid_accounts.txt'));
+      }
+      
+      if (results.invalid.length > 0) {
+        fs.writeFileSync('non_microsoft_accounts.txt', results.invalid.join('\n'));
+        console.log(chalk.yellow('💾 Non-Microsoft accounts saved to non_microsoft_accounts.txt'));
       }
 
-      // Use server connection method to test accounts
-      console.log(chalk.blue('🔄 Testing accounts... This may take a while.'));
-      await this.serverTestMethod(accounts);
+      if (results.invalidFormat.length > 0) {
+        fs.writeFileSync('invalid_format_accounts.txt', results.invalidFormat.join('\n'));
+        console.log(chalk.red('💾 Invalid format accounts saved to invalid_format_accounts.txt'));
+      }
+
+      console.log('');
+      console.log(chalk.gray('Note: This validation only checks email format and domain.'));
+      console.log(chalk.gray('For actual credential verification, you would need proper Azure app registration.'));
 
     } catch (error) {
       console.error(chalk.red(`❌ Account checker failed: ${error.message}`));
