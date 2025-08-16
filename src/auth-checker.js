@@ -20,19 +20,12 @@ export class AuthChecker {
       
       const authflow = new Authflow(email, cacheDir, {
         authTitle: Titles.MinecraftJavaEdition,
-        deviceType: 'Android',
-        flow: 'msal'
-      }, (code) => {
-        // This callback would be called for device code flow
-        // But we're using direct authentication
-        console.log(chalk.yellow(`Device code: ${code}`));
+        deviceType: 'raw',
+        flow: 'sisu'
       });
 
-      // Try to authenticate
-      const auth = await authflow.getMinecraftJavaToken({
-        username: email,
-        password: password
-      });
+      // Try to authenticate using the simpler sisu flow
+      const auth = await authflow.getMinecraftJavaToken();
 
       if (auth && auth.token) {
         console.log(chalk.green(`✅ ${email} - Valid`));
