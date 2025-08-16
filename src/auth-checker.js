@@ -21,7 +21,9 @@ export class AuthChecker {
       const authflow = new Authflow(email, cacheDir, {
         authTitle: Titles.MinecraftJavaEdition,
         deviceType: 'raw',
-        flow: 'sisu'
+        flow: 'sisu',
+        relyingParty: 'https://pocket.realms.minecraft.net/',
+        authTitle: '00000000-0000-0000-0000-000000000000'
       });
 
       // Try to authenticate using the simpler sisu flow
