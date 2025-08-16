@@ -1703,17 +1703,7 @@ class BotManager {
 
       console.log(chalk.blue(`📁 Found ${lines.length} accounts to check`));
       
-      const { method, confirm } = await inquirer.prompt([
-        {
-          type: 'list',
-          name: 'method',
-          message: 'Choose validation method:',
-          choices: [
-            { name: '🔐 Auth Only (Fast - Microsoft authentication)', value: 'auth' },
-            { name: '🎮 Server Test (Slow - connects to server)', value: 'server' }
-          ],
-          default: 'auth'
-        },
+      const { confirm } = await inquirer.prompt([
         {
           type: 'confirm',
           name: 'confirm',
@@ -1764,15 +1754,9 @@ class BotManager {
         return;
       }
 
-      if (method === 'auth') {
-        // Use fast Microsoft authentication
-        const authChecker = new AuthChecker();
-        const results = await authChecker.checkAccountList(accounts);
-        await authChecker.saveResults();
-      } else {
-        // Use the old server connection method
-        await this.serverTestMethod(accounts);
-      }
+      // Use server connection method to test accounts
+      console.log(chalk.blue('🔄 Testing accounts... This may take a while.'));
+      await this.serverTestMethod(accounts);
 
     } catch (error) {
       console.error(chalk.red(`❌ Account checker failed: ${error.message}`));
