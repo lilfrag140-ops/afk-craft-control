@@ -1,4 +1,5 @@
-import { Authflow, Titles } from 'prismarine-auth';
+import pkg from 'prismarine-auth';
+const { Authflow, Titles } = pkg;
 import chalk from 'chalk';
 
 export class AuthChecker {
