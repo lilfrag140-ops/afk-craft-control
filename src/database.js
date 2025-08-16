@@ -86,4 +86,36 @@ export class Database {
       server_port: parseInt(process.env.DEFAULT_SERVER_PORT) || 25565
     };
   }
+
+  static async updateServerConfig(serverIp, serverPort) {
+    // First check if a config exists
+    const { data: existing } = await supabase
+      .from('server_configs')
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (existing) {
+      // Update existing config
+      const { error } = await supabase
+        .from('server_configs')
+        .update({
+          server_ip: serverIp,
+          server_port: parseInt(serverPort)
+        })
+        .eq('id', existing.id);
+      
+      if (error) throw error;
+    } else {
+      // Insert new config
+      const { error } = await supabase
+        .from('server_configs')
+        .insert({
+          server_ip: serverIp,
+          server_port: parseInt(serverPort)
+        });
+      
+      if (error) throw error;
+    }
+  }
 }

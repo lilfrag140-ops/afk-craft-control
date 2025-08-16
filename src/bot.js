@@ -965,11 +965,7 @@ class BotManager {
     ]);
 
     try {
-      await Database.supabase
-        .from('server_configs')
-        .update({ server_ip: newIp, server_port: newPort })
-        .eq('id', currentConfig.id);
-
+      await Database.updateServerConfig(newIp, newPort);
       console.log(chalk.green('✅ Server configuration updated successfully!'));
     } catch (error) {
       console.error(chalk.red(`❌ Failed to update configuration: ${error.message}`));
