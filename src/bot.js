@@ -32,6 +32,7 @@ class BotManager {
       { name: '🔌 Disconnect All Bots', value: 'disconnect', disabled: connectedBots.length === 0 },
       { name: '🤖 Individual Bot Control', value: 'individual', disabled: connectedBots.length === 0 },
       { name: '🔍 Explore Addon', value: 'addon', disabled: connectedBots.length === 0 },
+      { name: '✅ Account Checker', value: 'checker' },
       { name: '💬 Chat Messages', value: 'chat' },
       { name: '🔄 Message Loops', value: 'loops' },
       { name: '👥 Manage Accounts', value: 'accounts' },
@@ -70,6 +71,9 @@ class BotManager {
         break;
       case 'addon':
         await this.exploreAddon();
+        break;
+      case 'checker':
+        await this.accountChecker();
         break;
       case 'chat':
         await this.manageChatMessages();
@@ -1674,6 +1678,141 @@ class BotManager {
       console.log(chalk.yellow('💡 Please check your .env file and Supabase configuration.'));
       process.exit(1);
     }
+  }
+
+  async accountChecker() {
+    try {
+      const fs = await import('fs');
+      
+      const filePath = 'accounts.txt';
+      
+      if (!fs.existsSync(filePath)) {
+        console.log(chalk.yellow('⚠️ accounts.txt file not found!'));
+        console.log(chalk.gray('Please create an accounts.txt file with the format:'));
+        console.log(chalk.gray('email:password'));
+        console.log(chalk.gray('email2:password2'));
+        await this.waitForKeypress();
+        return;
+      }
+
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      const lines = fileContent.split('\n').filter(line => line.trim().length > 0);
+      
+      if (lines.length === 0) {
+        console.log(chalk.yellow('⚠️ accounts.txt is empty!'));
+        await this.waitForKeypress();
+        return;
+      }
+
+      console.log(chalk.blue(`📁 Found ${lines.length} accounts to check`));
+      
+      const { confirm } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'confirm',
+          message: `Check ${lines.length} accounts from accounts.txt?`,
+          default: true
+        }
+      ]);
+
+      if (!confirm) {
+        console.log(chalk.yellow('❌ Operation cancelled.'));
+        await this.waitForKeypress();
+        return;
+      }
+
+      console.log(chalk.blue('🔄 Testing accounts... This may take a while.'));
+      
+      const workingAccounts = [];
+      const failedAccounts = [];
+      const invalidFormat = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        if (!line.includes(':')) {
+          console.log(chalk.red(`❌ Line ${i + 1}: Invalid format - missing ':' separator`));
+          invalidFormat.push(line);
+          continue;
+        }
+
+        const [email, password] = line.split(':');
+        
+        if (!email || !password) {
+          console.log(chalk.red(`❌ Line ${i + 1}: Invalid format - missing email or password`));
+          invalidFormat.push(line);
+          continue;
+        }
+
+        if (!email.includes('@')) {
+          console.log(chalk.red(`❌ Line ${i + 1}: Invalid email format - ${email}`));
+          invalidFormat.push(line);
+          continue;
+        }
+
+        console.log(chalk.cyan(`🔍 Testing ${i + 1}/${lines.length}: ${email.trim()}`));
+        
+        try {
+          // Create a test bot to check login
+          const testBot = new MinecraftBot(
+            email.trim(),
+            password.trim(),
+            'mc.hypixel.net', // Using a reliable test server
+            25565
+          );
+
+          // Set silent mode to prevent any commands
+          testBot.silentMode = true;
+          
+          // Try to connect with a shorter timeout
+          await Promise.race([
+            testBot.connect(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout')), 15000)
+            )
+          ]);
+          
+          // If we get here, login was successful
+          console.log(chalk.green(`✅ ${email.trim()} - Working`));
+          workingAccounts.push(`${email.trim()}:${password.trim()}`);
+          
+          // Disconnect immediately
+          testBot.disconnect();
+          
+        } catch (error) {
+          console.log(chalk.red(`❌ ${email.trim()} - Failed: ${error.message}`));
+          failedAccounts.push(`${email.trim()}:${password.trim()}`);
+        }
+        
+        // Small delay between tests to avoid rate limiting
+        if (i < lines.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+
+      // Show results
+      console.log('');
+      console.log(chalk.blue('📊 Account Check Results:'));
+      console.log(`✅ Working accounts: ${chalk.green(workingAccounts.length)}`);
+      console.log(`❌ Failed accounts: ${chalk.red(failedAccounts.length)}`);
+      console.log(`⚠️ Invalid format: ${chalk.yellow(invalidFormat.length)}`);
+      
+      // Save results to files
+      if (workingAccounts.length > 0) {
+        fs.writeFileSync('working_accounts.txt', workingAccounts.join('\n'));
+        console.log(chalk.green('💾 Working accounts saved to working_accounts.txt'));
+      }
+      
+      if (failedAccounts.length > 0) {
+        fs.writeFileSync('failed_accounts.txt', failedAccounts.join('\n'));
+        console.log(chalk.red('💾 Failed accounts saved to failed_accounts.txt'));
+      }
+
+    } catch (error) {
+      console.error(chalk.red(`❌ Account checker failed: ${error.message}`));
+    }
+
+    await this.waitForKeypress();
   }
 }
 
